@@ -343,7 +343,7 @@ namespace LittlePlanet.HybridTerraform
             }
 
             var distanceFromCenter = Vector3.Distance(shipRoot.position, planet.transform.position);
-            if (distanceFromCenter >= planet.Radius + detachDistance)
+            if (IsEscapePressed() && distanceFromCenter >= planet.Radius + detachDistance)
             {
                 FinishFlight(FinishReason.DetachDistanceExceeded, restoreCamera: true);
             }
