@@ -91,7 +91,6 @@ namespace LittlePlanet.HybridTerraform
         private Quaternion _savedShipRotation;
         private bool _savedShipActive;
         private bool _shipStateCached;
-        private float _cameraYaw;
         private float _cameraPitch;
         private bool _savedOrbitCameraEnabled = true;
         private bool _savedOrbitZoomEnabled = true;
@@ -316,7 +315,13 @@ namespace LittlePlanet.HybridTerraform
             }
 
             delta = Vector2.ClampMagnitude(delta, maxLookDeltaPerFrame);
-            _cameraYaw = Mathf.Repeat(_cameraYaw + delta.x * lookSensitivity, 360f);
+            if (shipRoot != null)
+            {
+                var up = GetPlanetUp(shipRoot.position);
+                var yawDelta = delta.x * lookSensitivity;
+                _lastShipForward = ProjectOnSurface(Quaternion.AngleAxis(yawDelta, up) * GetShipForward(up), up);
+            }
+
             _cameraPitch = Mathf.Clamp(_cameraPitch - delta.y * lookSensitivity, minCameraPitch, maxCameraPitch);
         }
 
@@ -499,9 +504,8 @@ namespace LittlePlanet.HybridTerraform
 
             var up = GetPlanetUp(shipRoot.position);
             var forward = GetShipForward(up);
-            var orbitForward = Quaternion.AngleAxis(_cameraYaw, up) * forward;
-            var right = Vector3.Cross(up, orbitForward).normalized;
-            var cameraDirection = Quaternion.AngleAxis(_cameraPitch, right) * -orbitForward;
+            var right = Vector3.Cross(up, forward).normalized;
+            var cameraDirection = Quaternion.AngleAxis(_cameraPitch, right) * -forward;
             return shipRoot.position + up * cameraFollowHeight + cameraDirection.normalized * cameraFollowDistance;
         }
 
@@ -569,7 +573,6 @@ namespace LittlePlanet.HybridTerraform
                 _lastShipForward = ProjectOnSurface(Vector3.Cross(controlledCamera.transform.right, up), up);
             }
 
-            _cameraYaw = 0f;
             _cameraPitch = initialCameraPitch;
             AlignShipRotation(up);
         }
