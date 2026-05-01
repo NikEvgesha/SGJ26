@@ -34,6 +34,7 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField] private Planet planet;
         [SerializeField] private Camera controlledCamera;
         [SerializeField] private PlanetCameraController orbitCameraController;
+        [SerializeField] private Transform shipRoot;
         [SerializeField] private Button activateButton;
         [SerializeField] private TMP_Text statusText;
 
@@ -55,6 +56,15 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField, Min(0.5f)] private float detachDistance = 8f;
         [SerializeField, Range(0.01f, 1f)] private float surfaceAlignLerp = 0.2f;
 
+        [Header("Third Person Camera")]
+        [SerializeField, Min(0.5f)] private float cameraFollowDistance = 6f;
+        [SerializeField, Min(0f)] private float cameraFollowHeight = 2f;
+        [SerializeField, Min(0f)] private float cameraLookAtHeight = 0.6f;
+        [SerializeField, Range(0.01f, 1f)] private float cameraFollowLerp = 0.25f;
+        [SerializeField, Range(-80f, 20f)] private float initialCameraPitch = -18f;
+        [SerializeField, Range(-85f, 45f)] private float minCameraPitch = -65f;
+        [SerializeField, Range(-45f, 85f)] private float maxCameraPitch = 25f;
+
         [Header("Terraforming")]
         [SerializeField, Range(1, 12)] private int terraformRadius = 2;
         [SerializeField, Min(0f)] private float terraformPowerPerSecond = 0.18f;
@@ -72,6 +82,13 @@ namespace LittlePlanet.HybridTerraform
         private Vector3 _approachStartPosition;
         private Tile _approachTile;
         private float _approachStartTime;
+        private Vector3 _lastShipForward;
+        private Vector3 _savedShipPosition;
+        private Quaternion _savedShipRotation;
+        private bool _savedShipActive;
+        private bool _shipStateCached;
+        private float _cameraYaw;
+        private float _cameraPitch;
         private bool _savedOrbitCameraEnabled = true;
         private bool _savedOrbitZoomEnabled = true;
         private bool _orbitControlsCached;
@@ -138,6 +155,14 @@ namespace LittlePlanet.HybridTerraform
             hoverAltitude = Mathf.Max(0.05f, hoverAltitude);
             magnetRange = Mathf.Max(0.1f, magnetRange);
             detachDistance = Mathf.Max(0.5f, detachDistance);
+            cameraFollowDistance = Mathf.Max(0.5f, cameraFollowDistance);
+            cameraFollowHeight = Mathf.Max(0f, cameraFollowHeight);
+            cameraLookAtHeight = Mathf.Max(0f, cameraLookAtHeight);
+            cameraFollowLerp = Mathf.Clamp01(cameraFollowLerp);
+            if (maxCameraPitch < minCameraPitch)
+            {
+                maxCameraPitch = minCameraPitch;
+            }
         }
 
         public void ActivateSkill()
@@ -176,8 +201,16 @@ namespace LittlePlanet.HybridTerraform
                 return;
             }
 
+            EnsureShipRoot();
+            if (shipRoot == null)
+            {
+                return;
+            }
+
             _savedCameraPosition = controlledCamera.transform.position;
             _savedCameraRotation = controlledCamera.transform.rotation;
+            CacheShipState();
+            PlaceShipAtTile(tile);
             _approachStartPosition = _savedCameraPosition;
             _approachStartTime = Time.time;
             _flightEndTime = 0f;
@@ -188,7 +221,7 @@ namespace LittlePlanet.HybridTerraform
             SetOrbitZoomEnabled(false);
 
             _state = SkillState.Approaching;
-            LogSkill($"Approach started. tile={tile.Index}, flightDuration={flightDuration:0.##}, approachDuration={approachDuration:0.##}");
+            LogSkill($"Third-person approach started. tile={tile.Index}, flightDuration={flightDuration:0.##}, approachDuration={approachDuration:0.##}");
         }
 
         private void UpdateApproach()
@@ -205,7 +238,8 @@ namespace LittlePlanet.HybridTerraform
                 return;
             }
 
-            var targetPosition = GetFlyTargetPosition(_approachTile);
+            MagnetizeShipToSurface();
+            var targetPosition = GetDesiredCameraPosition();
             var durationT = Mathf.Clamp01((Time.time - _approachStartTime) / approachDuration);
             var easedT = durationT * durationT * (3f - 2f * durationT);
             var lerpPosition = Vector3.Lerp(_approachStartPosition, targetPosition, easedT);
@@ -214,7 +248,7 @@ namespace LittlePlanet.HybridTerraform
                 targetPosition,
                 approachSpeed * Time.deltaTime);
 
-            LookAtApproachTarget(targetPosition);
+            LookAtShip();
 
             if (durationT >= 1f || Vector3.Distance(controlledCamera.transform.position, targetPosition) <= approachStopDistance)
             {
@@ -244,15 +278,16 @@ namespace LittlePlanet.HybridTerraform
                 return;
             }
 
-            RotateCameraIfRequested();
-            MoveCamera();
+            RotateCameraOrbitIfRequested();
+            MoveShip();
             if (_state != SkillState.Flying)
             {
                 return;
             }
 
-            MagnetizeToSurface();
-            TerraformNearCamera();
+            MagnetizeShipToSurface();
+            UpdateCameraFollow();
+            TerraformNearShip();
         }
 
         private Vector3 GetFlyTargetPosition(Tile tile)
@@ -262,35 +297,36 @@ namespace LittlePlanet.HybridTerraform
             return surfacePosition + normal * hoverAltitude;
         }
 
-        private void RotateCameraIfRequested()
+        private void RotateCameraOrbitIfRequested()
         {
             if (!TryGetLookDelta(out var delta))
             {
                 return;
             }
 
-            var cameraTransform = controlledCamera.transform;
-            var up = GetPlanetUp(cameraTransform.position);
-            var yaw = Quaternion.AngleAxis(delta.x * lookSensitivity, up);
-            var pitch = Quaternion.AngleAxis(-delta.y * lookSensitivity, cameraTransform.right);
-            cameraTransform.rotation = yaw * pitch * cameraTransform.rotation;
+            _cameraYaw += delta.x * lookSensitivity;
+            _cameraPitch = Mathf.Clamp(_cameraPitch - delta.y * lookSensitivity, minCameraPitch, maxCameraPitch);
         }
 
-        private void MoveCamera()
+        private void MoveShip()
         {
-            var cameraTransform = controlledCamera.transform;
-            var up = GetPlanetUp(cameraTransform.position);
+            if (shipRoot == null)
+            {
+                return;
+            }
+
+            var up = GetPlanetUp(shipRoot.position);
             var velocity = Vector3.zero;
 
             if (autoForward)
             {
-                velocity += ProjectOnSurface(cameraTransform.forward, up) * forwardSpeed;
+                velocity += ProjectOnSurface(controlledCamera.transform.forward, up) * forwardSpeed;
             }
 
             if (TryGetMoveInput(out var moveInput))
             {
-                var forward = ProjectOnSurface(cameraTransform.forward, up);
-                var right = ProjectOnSurface(cameraTransform.right, up);
+                var forward = ProjectOnSurface(controlledCamera.transform.forward, up);
+                var right = ProjectOnSurface(controlledCamera.transform.right, up);
                 velocity += forward * (moveInput.y * forwardSpeed);
                 velocity += right * (moveInput.x * strafeSpeed);
             }
@@ -300,19 +336,27 @@ namespace LittlePlanet.HybridTerraform
                 velocity += up * escapeSpeed;
             }
 
-            cameraTransform.position += velocity * Time.deltaTime;
+            shipRoot.position += velocity * Time.deltaTime;
+            if (velocity.sqrMagnitude > 0.000001f)
+            {
+                _lastShipForward = ProjectOnSurface(velocity, up);
+            }
 
-            var distanceFromCenter = Vector3.Distance(cameraTransform.position, planet.transform.position);
+            var distanceFromCenter = Vector3.Distance(shipRoot.position, planet.transform.position);
             if (distanceFromCenter >= planet.Radius + detachDistance)
             {
                 FinishFlight(FinishReason.DetachDistanceExceeded, restoreCamera: true);
             }
         }
 
-        private void MagnetizeToSurface()
+        private void MagnetizeShipToSurface()
         {
-            var cameraTransform = controlledCamera.transform;
-            var nearestTile = planet.FindNearestTile(cameraTransform.position);
+            if (shipRoot == null)
+            {
+                return;
+            }
+
+            var nearestTile = planet.FindNearestTile(shipRoot.position);
             if (nearestTile == null)
             {
                 return;
@@ -322,20 +366,26 @@ namespace LittlePlanet.HybridTerraform
             var surfacePosition = planet.GetTileWorldSurfaceCenter(nearestTile);
             var normal = (surfacePosition - center).normalized;
             var surfaceRadius = Vector3.Distance(surfacePosition, center);
-            var currentRadius = Vector3.Distance(cameraTransform.position, center);
+            var currentRadius = Vector3.Distance(shipRoot.position, center);
             if (currentRadius > surfaceRadius + magnetRange || IsEscapePressed())
             {
+                AlignShipRotation(normal);
                 return;
             }
 
             var targetPosition = center + normal * (surfaceRadius + hoverAltitude);
-            cameraTransform.position = Vector3.Lerp(cameraTransform.position, targetPosition, surfaceAlignLerp);
-            LookAlongSurface(normal);
+            shipRoot.position = Vector3.Lerp(shipRoot.position, targetPosition, surfaceAlignLerp);
+            AlignShipRotation(normal);
         }
 
-        private void TerraformNearCamera()
+        private void TerraformNearShip()
         {
-            var tile = planet.FindNearestTile(controlledCamera.transform.position);
+            if (shipRoot == null)
+            {
+                return;
+            }
+
+            var tile = planet.FindNearestTile(shipRoot.position);
             if (tile == null)
             {
                 return;
@@ -367,6 +417,7 @@ namespace LittlePlanet.HybridTerraform
                 controlledCamera.transform.SetPositionAndRotation(_savedCameraPosition, _savedCameraRotation);
             }
 
+            RestoreShipState();
             RestoreOrbitControls();
             _approachTile = null;
             _state = Time.time < _cooldownEndTime ? SkillState.Cooldown : SkillState.Ready;
@@ -388,6 +439,7 @@ namespace LittlePlanet.HybridTerraform
             var flightRemaining = _flightEndTime > 0f ? Mathf.Max(0f, _flightEndTime - now) : 0f;
             var cooldownRemaining = _cooldownEndTime > 0f ? Mathf.Max(0f, _cooldownEndTime - now) : 0f;
             var cameraDistance = 0f;
+            var shipDistance = 0f;
             var detachThreshold = 0f;
 
             if (planet != null && controlledCamera != null)
@@ -396,44 +448,112 @@ namespace LittlePlanet.HybridTerraform
                 detachThreshold = planet.Radius + detachDistance;
             }
 
-            return $"state={_state}, time={now:0.00}, flightLeft={flightRemaining:0.00}, cooldownLeft={cooldownRemaining:0.00}, cameraDistance={cameraDistance:0.00}, detachThreshold={detachThreshold:0.00}";
+            if (planet != null && shipRoot != null)
+            {
+                shipDistance = Vector3.Distance(shipRoot.position, planet.transform.position);
+            }
+
+            return $"state={_state}, time={now:0.00}, flightLeft={flightRemaining:0.00}, cooldownLeft={cooldownRemaining:0.00}, cameraDistance={cameraDistance:0.00}, shipDistance={shipDistance:0.00}, detachThreshold={detachThreshold:0.00}";
         }
 
-        private void LookAtApproachTarget(Vector3 targetPosition)
+        private void UpdateCameraFollow()
         {
-            if (controlledCamera == null || planet == null)
+            if (controlledCamera == null || shipRoot == null)
             {
                 return;
             }
 
-            var cameraTransform = controlledCamera.transform;
-            var toTarget = targetPosition - cameraTransform.position;
+            controlledCamera.transform.position = Vector3.Lerp(
+                controlledCamera.transform.position,
+                GetDesiredCameraPosition(),
+                cameraFollowLerp);
+            LookAtShip();
+        }
+
+        private Vector3 GetDesiredCameraPosition()
+        {
+            if (shipRoot == null)
+            {
+                return controlledCamera != null ? controlledCamera.transform.position : Vector3.zero;
+            }
+
+            var up = GetPlanetUp(shipRoot.position);
+            var forward = GetShipForward(up);
+            var orbitForward = Quaternion.AngleAxis(_cameraYaw, up) * forward;
+            var right = Vector3.Cross(up, orbitForward).normalized;
+            var cameraDirection = Quaternion.AngleAxis(_cameraPitch, right) * -orbitForward;
+            return shipRoot.position + up * cameraFollowHeight + cameraDirection.normalized * cameraFollowDistance;
+        }
+
+        private void LookAtShip()
+        {
+            if (controlledCamera == null || shipRoot == null)
+            {
+                return;
+            }
+
+            var up = GetPlanetUp(shipRoot.position);
+            var target = shipRoot.position + up * cameraLookAtHeight;
+            var toTarget = target - controlledCamera.transform.position;
             if (toTarget.sqrMagnitude <= 0.000001f)
             {
                 return;
             }
 
-            var up = (targetPosition - planet.transform.position).normalized;
             var targetRotation = Quaternion.LookRotation(toTarget.normalized, up);
-            cameraTransform.rotation = Quaternion.Slerp(cameraTransform.rotation, targetRotation, surfaceAlignLerp);
+            controlledCamera.transform.rotation = Quaternion.Slerp(controlledCamera.transform.rotation, targetRotation, cameraFollowLerp);
         }
 
-        private void LookAlongSurface(Vector3 surfaceNormal)
+        private void PlaceShipAtTile(Tile tile)
         {
-            if (controlledCamera == null)
+            if (shipRoot == null || tile == null)
             {
                 return;
             }
 
-            var up = surfaceNormal.sqrMagnitude > 0.000001f ? surfaceNormal.normalized : controlledCamera.transform.up;
-            var forward = ProjectOnSurface(controlledCamera.transform.forward, up);
-            if (forward.sqrMagnitude <= 0.000001f)
+            var position = GetFlyTargetPosition(tile);
+            shipRoot.gameObject.SetActive(true);
+            shipRoot.position = position;
+            var up = GetPlanetUp(position);
+            _lastShipForward = ProjectOnSurface(controlledCamera.transform.forward, up);
+            if (_lastShipForward.sqrMagnitude <= 0.000001f)
             {
-                forward = Vector3.Cross(up, controlledCamera.transform.right).normalized;
+                _lastShipForward = ProjectOnSurface(Vector3.Cross(controlledCamera.transform.right, up), up);
             }
 
-            var targetRotation = Quaternion.LookRotation(forward, up);
-            controlledCamera.transform.rotation = Quaternion.Slerp(controlledCamera.transform.rotation, targetRotation, surfaceAlignLerp);
+            _cameraYaw = 0f;
+            _cameraPitch = initialCameraPitch;
+            AlignShipRotation(up);
+        }
+
+        private void AlignShipRotation(Vector3 up)
+        {
+            if (shipRoot == null)
+            {
+                return;
+            }
+
+            var forward = GetShipForward(up);
+            shipRoot.rotation = Quaternion.Slerp(shipRoot.rotation, Quaternion.LookRotation(forward, up), surfaceAlignLerp);
+        }
+
+        private Vector3 GetShipForward(Vector3 up)
+        {
+            var forward = ProjectOnSurface(_lastShipForward, up);
+            if (forward.sqrMagnitude > 0.000001f)
+            {
+                return forward;
+            }
+
+            forward = shipRoot != null ? ProjectOnSurface(shipRoot.forward, up) : Vector3.zero;
+            if (forward.sqrMagnitude > 0.000001f)
+            {
+                return forward;
+            }
+
+            return Vector3.Cross(up, Vector3.right).sqrMagnitude > 0.000001f
+                ? Vector3.Cross(up, Vector3.right).normalized
+                : Vector3.Cross(up, Vector3.forward).normalized;
         }
 
         private Vector3 GetPlanetUp(Vector3 worldPosition)
@@ -469,6 +589,45 @@ namespace LittlePlanet.HybridTerraform
             {
                 orbitCameraController = FindFirstObjectByType<PlanetCameraController>();
             }
+        }
+
+        private void EnsureShipRoot()
+        {
+            if (shipRoot != null)
+            {
+                return;
+            }
+
+            var shipObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            shipObject.name = "TerraformShip_Runtime";
+            shipObject.transform.localScale = Vector3.one * 0.5f;
+            shipRoot = shipObject.transform;
+        }
+
+        private void CacheShipState()
+        {
+            if (shipRoot == null)
+            {
+                _shipStateCached = false;
+                return;
+            }
+
+            _savedShipPosition = shipRoot.position;
+            _savedShipRotation = shipRoot.rotation;
+            _savedShipActive = shipRoot.gameObject.activeSelf;
+            _shipStateCached = true;
+        }
+
+        private void RestoreShipState()
+        {
+            if (shipRoot == null || !_shipStateCached)
+            {
+                return;
+            }
+
+            shipRoot.SetPositionAndRotation(_savedShipPosition, _savedShipRotation);
+            shipRoot.gameObject.SetActive(_savedShipActive);
+            _shipStateCached = false;
         }
 
         private void BindButton()
