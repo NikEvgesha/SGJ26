@@ -148,11 +148,6 @@ namespace LittlePlanet.PlanetSystem
             controlledCamera.transform.LookAt(planetRoot.position);
         }
 
-        public void SyncFromCurrentCameraState()
-        {
-            InitializeFromCurrentCameraState();
-        }
-
         private bool TryGetScrollDelta(out float value)
         {
 #if ENABLE_INPUT_SYSTEM
