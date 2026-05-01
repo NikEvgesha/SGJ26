@@ -144,7 +144,7 @@ namespace LittlePlanet.HybridTerraform
         {
             if (_state == SkillState.Approaching || _state == SkillState.Flying)
             {
-                FinishFlight(restoreCamera: true);
+                FinishFlight(restoreCamera: false);
                 return;
             }
 
@@ -180,13 +180,13 @@ namespace LittlePlanet.HybridTerraform
         {
             if (planet == null || controlledCamera == null)
             {
-                FinishFlight(restoreCamera: true);
+                FinishFlight(restoreCamera: false);
                 return;
             }
 
             if (_approachTile == null)
             {
-                FinishFlight(restoreCamera: true);
+                FinishFlight(restoreCamera: false);
                 return;
             }
 
@@ -218,13 +218,13 @@ namespace LittlePlanet.HybridTerraform
         {
             if (planet == null || controlledCamera == null)
             {
-                FinishFlight(restoreCamera: true);
+                FinishFlight(restoreCamera: false);
                 return;
             }
 
             if (Time.time >= _flightEndTime)
             {
-                FinishFlight(restoreCamera: true);
+                FinishFlight(restoreCamera: false);
                 return;
             }
 
@@ -289,7 +289,7 @@ namespace LittlePlanet.HybridTerraform
             var distanceFromCenter = Vector3.Distance(cameraTransform.position, planet.transform.position);
             if (distanceFromCenter >= planet.Radius + detachDistance)
             {
-                FinishFlight(restoreCamera: true);
+                FinishFlight(restoreCamera: false);
             }
         }
 
@@ -350,6 +350,7 @@ namespace LittlePlanet.HybridTerraform
             }
 
             RestoreOrbitControls();
+            SyncOrbitCameraToCurrentPosition();
             _approachTile = null;
             _state = Time.time < _cooldownEndTime ? SkillState.Cooldown : SkillState.Ready;
         }
@@ -492,6 +493,14 @@ namespace LittlePlanet.HybridTerraform
             orbitCameraController.ZoomEnabled = _savedOrbitZoomEnabled;
             orbitCameraController.enabled = _savedOrbitCameraEnabled;
             _orbitControlsCached = false;
+        }
+
+        private void SyncOrbitCameraToCurrentPosition()
+        {
+            if (orbitCameraController != null && controlledCamera != null)
+            {
+                orbitCameraController.SyncFromCurrentCameraState();
+            }
         }
 
         private void UpdateButtonState()
