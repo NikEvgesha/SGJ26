@@ -1,0 +1,53 @@
+fileFormatVersion: 2
+guid: 3b9eaaa7d2475d247ada6ea0db1260e3
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: eeb34f3ead148d04e8630fc3f79cbc1a, type: 3}
+  dataVersion: 7
+  fileType: 0
+  gameObjectName: HotTower
+  meshMode: 1
+  importMode: 1
+  importScale: {x: 1, y: 1, z: 1}
+  importOffset: {x: 0, y: 0, z: 0}
+  combineFaces: 1
+  ignoreCavity: 1
+  shareSameFace: 1
+  removeUnusedPalettes: 1
+  shareSameMaterial: 1
+  outputStructure: 0
+  generateLightmapUVs: 0
+  generateLightmapUVsAngleError: 8
+  generateLightmapUVsAreaError: 15
+  generateLightmapUVsHardAngle: 88
+  generateLightmapUVsPackMargin: 4
+  generateTangents: 0
+  generateVertexColors: 0
+  generateVertexColorMax: {r: 1, g: 1, b: 1, a: 1}
+  generateVertexColorMin: {r: 0.64, g: 0.64, b: 0.64, a: 1}
+  meshFaceVertexOffset: 0
+  loadFromVoxelFile: 1
+  generateMipMaps: 0
+  colliderType: 0
+  chunkPivotT: {x: 0.5, y: 0.5, z: 0.5}
+  createContactChunkFaces: 0
+  materialMode: 0
+  materials:
+  - {instanceID: 0}
+  - {instanceID: 0}
+  materialNames:
+  - HotTower_0
+  - HotTower_1
+  remappedMaterials:
+  - name: HotTower_0
+    material: {fileID: 2100000, guid: d652d0cd683416f47bbf3cc8f2b7171f, type: 2}
+  - name: HotTower_1
+    material: {fileID: 2100000, guid: 2fc509656cc1ae24ab18d1c1023f27b1, type: 2}
+  export: 0
+  legacyVoxImport: 0
+  legacyAssetNaming: 0
