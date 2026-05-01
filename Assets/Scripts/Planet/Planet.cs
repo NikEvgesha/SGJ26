@@ -1,12 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using LittlePlanet.RuntimeInput;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Rendering;
 using TMPro;
-#if ENABLE_INPUT_SYSTEM
-using UnityEngine.InputSystem;
-#endif
 
 namespace LittlePlanet.PlanetSystem
 {
@@ -1614,6 +1612,11 @@ namespace LittlePlanet.PlanetSystem
                 return;
             }
 
+            if (UiInputRuntime.IsPointerOverInteractiveUi())
+            {
+                return;
+            }
+
             if (!TryGetPointerDownPosition(out var pointerPosition))
             {
                 return;
@@ -1979,27 +1982,13 @@ namespace LittlePlanet.PlanetSystem
 
         private static bool TryGetPointerDownPosition(out Vector2 pointerPosition)
         {
-#if ENABLE_INPUT_SYSTEM
-            if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+            if (InputCompat.WasLeftMousePressedThisFrame())
             {
-                pointerPosition = Mouse.current.position.ReadValue();
+                pointerPosition = InputCompat.GetMousePosition();
                 return true;
             }
-
-            if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.wasPressedThisFrame)
-            {
-                pointerPosition = Touchscreen.current.primaryTouch.position.ReadValue();
-                return true;
-            }
-#endif
 
 #if ENABLE_LEGACY_INPUT_MANAGER
-            if (Input.GetMouseButtonDown(0))
-            {
-                pointerPosition = Input.mousePosition;
-                return true;
-            }
-
             if (Input.touchCount > 0)
             {
                 var touch = Input.GetTouch(0);
@@ -2017,19 +2006,11 @@ namespace LittlePlanet.PlanetSystem
 
         private static bool TryGetPointerPosition(out Vector2 pointerPosition)
         {
-#if ENABLE_INPUT_SYSTEM
-            if (Mouse.current != null)
+            if (InputCompat.HasPointer())
             {
-                pointerPosition = Mouse.current.position.ReadValue();
+                pointerPosition = InputCompat.GetMousePosition();
                 return true;
             }
-
-            if (Touchscreen.current != null && Touchscreen.current.primaryTouch.press.isPressed)
-            {
-                pointerPosition = Touchscreen.current.primaryTouch.position.ReadValue();
-                return true;
-            }
-#endif
 
 #if ENABLE_LEGACY_INPUT_MANAGER
             pointerPosition = Input.mousePosition;
