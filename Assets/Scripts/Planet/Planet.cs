@@ -397,6 +397,130 @@ namespace LittlePlanet.PlanetSystem
             sourceTile.ApplyToNeighbors(action);
         }
 
+        public Vector3 GetTileWorldSurfaceCenter(Tile tile, float extraOffset = 0f)
+        {
+            if (tile == null)
+            {
+                return transform.position;
+            }
+
+            var localPosition = GetTileSurfacePoint(tile.Index, tile.Center.normalized, tileElevation + extraOffset, true);
+            return transform.TransformPoint(localPosition);
+        }
+
+        public Tile FindNearestTile(Vector3 worldPosition)
+        {
+            if (_tiles.Count == 0)
+            {
+                return null;
+            }
+
+            var localPoint = transform.InverseTransformPoint(worldPosition);
+            if (localPoint.sqrMagnitude <= 0.000001f)
+            {
+                return _tiles[0];
+            }
+
+            var direction = localPoint.normalized;
+            Tile bestTile = null;
+            var bestDot = float.NegativeInfinity;
+            for (var i = 0; i < _tiles.Count; i++)
+            {
+                var tile = _tiles[i];
+                var dot = Vector3.Dot(tile.Center.normalized, direction);
+                if (dot <= bestDot)
+                {
+                    continue;
+                }
+
+                bestDot = dot;
+                bestTile = tile;
+            }
+
+            return bestTile;
+        }
+
+        public float GetTileTerraforming01(Tile tile)
+        {
+            if (tile == null)
+            {
+                return 0f;
+            }
+
+            EnsureClickTintArrays();
+            if (_tileTintCurrent == null || tile.Index < 0 || tile.Index >= _tileTintCurrent.Length)
+            {
+                return 0f;
+            }
+
+            return Mathf.Clamp01(_tileTintCurrent[tile.Index]);
+        }
+
+        public float AddTerraformingInfluence(Tile sourceTile, int radiusInTiles, float influence)
+        {
+            if (sourceTile == null || influence <= 0f || _tiles.Count == 0)
+            {
+                return 0f;
+            }
+
+            EnsureClickTintArrays();
+            if (_tileTintCurrent == null || _tileTintTarget == null)
+            {
+                return 0f;
+            }
+
+            var effectiveRadius = Mathf.Clamp(radiusInTiles, 1, 16);
+            var visited = new HashSet<int>();
+            var currentFrontier = new List<int>(1) { sourceTile.Index };
+            visited.Add(sourceTile.Index);
+
+            var totalApplied = 0f;
+            for (var depth = 0; depth < effectiveRadius; depth++)
+            {
+                var weight = GetRingWeight(depth, effectiveRadius);
+                var stageInfluence = influence * weight;
+                for (var i = 0; i < currentFrontier.Count; i++)
+                {
+                    totalApplied += ApplyTintInfluenceByIndex(currentFrontier[i], stageInfluence);
+                }
+
+                if (depth == effectiveRadius - 1)
+                {
+                    break;
+                }
+
+                var nextFrontier = new List<int>(currentFrontier.Count * 2 + 4);
+                for (var i = 0; i < currentFrontier.Count; i++)
+                {
+                    var tileIndex = currentFrontier[i];
+                    if (tileIndex < 0 || tileIndex >= _tiles.Count)
+                    {
+                        continue;
+                    }
+
+                    var neighbors = _tiles[tileIndex].Neighbors;
+                    for (var j = 0; j < neighbors.Count; j++)
+                    {
+                        var neighbor = neighbors[j];
+                        if (neighbor == null || !visited.Add(neighbor.Index))
+                        {
+                            continue;
+                        }
+
+                        nextFrontier.Add(neighbor.Index);
+                    }
+                }
+
+                currentFrontier = nextFrontier;
+                if (currentFrontier.Count == 0)
+                {
+                    break;
+                }
+            }
+
+            return totalApplied;
+        }
+
         public void AddWater()
         {
             if (!manageWater)
@@ -1234,34 +1358,35 @@ namespace LittlePlanet.PlanetSystem
             RebuildActiveTintTiles();
         }
 
-        private void ApplyTintInfluenceByIndex(int tileIndex, float influence)
+        private float ApplyTintInfluenceByIndex(int tileIndex, float influence)
         {
             if (_tileTintCurrent == null || _tileTintTarget == null)
             {
-                return;
+                return 0f;
             }
 
             if (tileIndex < 0 || tileIndex >= _tileTintTarget.Length)
             {
-                return;
+                return 0f;
             }
 
             if (_isHighlandTile != null && tileIndex < _isHighlandTile.Length && _isHighlandTile[tileIndex])
             {
-                return;
+                return 0f;
             }
 
             var previous = _tileTintTarget[tileIndex];
             var next = Mathf.Clamp01(previous + influence);
             if (Mathf.Abs(next - previous) <= 0.0001f)
             {
-                return;
+                return 0f;
             }
 
             _tileTintTarget[tileIndex] = next;
             _tileTintCurrent[tileIndex] = next;
             _changedTintTiles.Add(tileIndex);
             _clickTintDirty = true;
+            return next - previous;
         }
 
         private void RegisterTintTileIfActive(int tileIndex)
