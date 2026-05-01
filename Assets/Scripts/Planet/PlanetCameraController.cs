@@ -35,6 +35,8 @@ namespace LittlePlanet.PlanetSystem
         private float _currentDistance;
         private Vector3 _cameraDirection;
 
+        public bool ZoomEnabled { get; set; } = true;
+
         private void Awake()
         {
             ResolveReferences();
@@ -103,6 +105,11 @@ namespace LittlePlanet.PlanetSystem
 
         private void HandleZoom()
         {
+            if (!ZoomEnabled)
+            {
+                return;
+            }
+
             if (!TryGetScrollDelta(out var scrollDelta))
             {
                 return;

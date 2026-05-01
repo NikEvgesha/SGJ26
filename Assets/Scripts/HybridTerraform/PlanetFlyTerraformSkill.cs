@@ -28,9 +28,9 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField] private TMP_Text statusText;
 
         [Header("Skill")]
-        [SerializeField, Min(1f)] private float flightDuration = 60f;
+        [SerializeField, Min(1f)] private float flightDuration = 120f;
         [SerializeField, Min(0f)] private float cooldownDuration = 15f;
-        [SerializeField, Min(0.1f)] private float approachSpeed = 12f;
+        [SerializeField, Min(0.1f)] private float approachSpeed = 20f;
         [SerializeField, Min(0.05f)] private float approachStopDistance = 0.25f;
 
         [Header("Flight")]
@@ -39,8 +39,8 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField, Min(0f)] private float strafeSpeed = 4f;
         [SerializeField, Min(0f)] private float escapeSpeed = 8f;
         [SerializeField, Min(0.01f)] private float lookSensitivity = 0.12f;
-        [SerializeField, Min(0.05f)] private float hoverAltitude = 0.8f;
-        [SerializeField, Min(0.1f)] private float magnetRange = 2.5f;
+        [SerializeField, Min(0.05f)] private float hoverAltitude = 0.35f;
+        [SerializeField, Min(0.1f)] private float magnetRange = 4f;
         [SerializeField, Min(0.5f)] private float detachDistance = 8f;
         [SerializeField, Range(0.01f, 1f)] private float surfaceAlignLerp = 0.2f;
 
@@ -56,6 +56,9 @@ namespace LittlePlanet.HybridTerraform
         private Vector3 _savedCameraPosition;
         private Quaternion _savedCameraRotation;
         private Tile _approachTile;
+        private bool _savedOrbitCameraEnabled = true;
+        private bool _savedOrbitZoomEnabled = true;
+        private bool _orbitControlsCached;
 
         private void Awake()
         {
@@ -82,7 +85,7 @@ namespace LittlePlanet.HybridTerraform
             }
 
             UnbindButton();
-            SetOrbitCameraEnabled(true);
+            RestoreOrbitControls();
         }
 
         private void Update()
@@ -117,6 +120,8 @@ namespace LittlePlanet.HybridTerraform
             }
 
             _state = SkillState.Aiming;
+            CacheOrbitControls();
+            SetOrbitZoomEnabled(false);
             UpdateStatusText();
         }
 
@@ -131,6 +136,7 @@ namespace LittlePlanet.HybridTerraform
             if (_state == SkillState.Aiming)
             {
                 _state = SkillState.Ready;
+                RestoreOrbitControls();
             }
         }
 
@@ -148,6 +154,7 @@ namespace LittlePlanet.HybridTerraform
             _pendingCurrency = 0f;
             _approachTile = tile;
             SetOrbitCameraEnabled(false);
+            SetOrbitZoomEnabled(false);
 
             _state = SkillState.Approaching;
         }
@@ -178,7 +185,7 @@ namespace LittlePlanet.HybridTerraform
                 targetPosition,
                 approachSpeed * Time.deltaTime);
 
-            LookAlongSurface(targetPosition - planet.transform.position);
+            LookAtApproachTarget(targetPosition);
 
             if (Vector3.Distance(controlledCamera.transform.position, targetPosition) <= approachStopDistance)
             {
@@ -321,9 +328,28 @@ namespace LittlePlanet.HybridTerraform
                 controlledCamera.transform.SetPositionAndRotation(_savedCameraPosition, _savedCameraRotation);
             }
 
-            SetOrbitCameraEnabled(true);
+            RestoreOrbitControls();
             _approachTile = null;
             _state = Time.time < _cooldownEndTime ? SkillState.Cooldown : SkillState.Ready;
+        }
+
+        private void LookAtApproachTarget(Vector3 targetPosition)
+        {
+            if (controlledCamera == null || planet == null)
+            {
+                return;
+            }
+
+            var cameraTransform = controlledCamera.transform;
+            var toTarget = targetPosition - cameraTransform.position;
+            if (toTarget.sqrMagnitude <= 0.000001f)
+            {
+                return;
+            }
+
+            var up = (targetPosition - planet.transform.position).normalized;
+            var targetRotation = Quaternion.LookRotation(toTarget.normalized, up);
+            cameraTransform.rotation = Quaternion.Slerp(cameraTransform.rotation, targetRotation, surfaceAlignLerp);
         }
 
         private void LookAlongSurface(Vector3 surfaceNormal)
@@ -406,6 +432,45 @@ namespace LittlePlanet.HybridTerraform
             {
                 orbitCameraController.enabled = enabled;
             }
+        }
+
+        private void SetOrbitZoomEnabled(bool enabled)
+        {
+            if (orbitCameraController != null)
+            {
+                orbitCameraController.ZoomEnabled = enabled;
+            }
+        }
+
+        private void CacheOrbitControls()
+        {
+            if (orbitCameraController == null)
+            {
+                _savedOrbitCameraEnabled = true;
+                _savedOrbitZoomEnabled = true;
+                return;
+            }
+
+            _savedOrbitCameraEnabled = orbitCameraController.enabled;
+            _savedOrbitZoomEnabled = orbitCameraController.ZoomEnabled;
+            _orbitControlsCached = true;
+        }
+
+        private void RestoreOrbitControls()
+        {
+            if (orbitCameraController == null)
+            {
+                return;
+            }
+
+            if (!_orbitControlsCached)
+            {
+                return;
+            }
+
+            orbitCameraController.ZoomEnabled = _savedOrbitZoomEnabled;
+            orbitCameraController.enabled = _savedOrbitCameraEnabled;
+            _orbitControlsCached = false;
         }
 
         private void UpdateButtonState()
