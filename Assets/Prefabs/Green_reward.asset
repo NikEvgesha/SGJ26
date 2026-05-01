@@ -18,5 +18,5 @@ MonoBehaviour:
   costMultiplier: 1.25
   upgradeType: 2
   maxLevel: 10
-  valuePerLevel: 1
+  valuePerLevel: 10
   icon: {fileID: 21300000, guid: 945054b3f36fc624fbf5776c71d564fb, type: 3}

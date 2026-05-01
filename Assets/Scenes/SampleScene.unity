@@ -6492,7 +6492,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1183624434587185065, guid: cb941e351246eea4784584a4a0fd17ff, type: 3}
       propertyPath: currencyPerCompletedTile
-      value: 1
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 6188218533434746524, guid: cb941e351246eea4784584a4a0fd17ff, type: 3}
       propertyPath: m_LocalPosition.x
