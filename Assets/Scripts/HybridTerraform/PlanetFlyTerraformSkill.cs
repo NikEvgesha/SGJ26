@@ -51,6 +51,7 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField, Min(0f)] private float strafeSpeed = 4f;
         [SerializeField, Min(0f)] private float escapeSpeed = 8f;
         [SerializeField, Min(0.01f)] private float lookSensitivity = 0.12f;
+        [SerializeField, Min(1f)] private float maxLookDeltaPerFrame = 80f;
         [SerializeField, Min(0.05f)] private float hoverAltitude = 0.35f;
         [SerializeField, Min(0.1f)] private float magnetRange = 4f;
         [SerializeField, Min(0.5f)] private float detachDistance = 8f;
@@ -155,6 +156,7 @@ namespace LittlePlanet.HybridTerraform
             hoverAltitude = Mathf.Max(0.05f, hoverAltitude);
             magnetRange = Mathf.Max(0.1f, magnetRange);
             detachDistance = Mathf.Max(0.5f, detachDistance);
+            maxLookDeltaPerFrame = Mathf.Max(1f, maxLookDeltaPerFrame);
             cameraFollowDistance = Mathf.Max(0.5f, cameraFollowDistance);
             cameraFollowHeight = Mathf.Max(0f, cameraFollowHeight);
             cameraLookAtHeight = Mathf.Max(0f, cameraLookAtHeight);
@@ -304,7 +306,8 @@ namespace LittlePlanet.HybridTerraform
                 return;
             }
 
-            _cameraYaw += delta.x * lookSensitivity;
+            delta = Vector2.ClampMagnitude(delta, maxLookDeltaPerFrame);
+            _cameraYaw = Mathf.Repeat(_cameraYaw + delta.x * lookSensitivity, 360f);
             _cameraPitch = Mathf.Clamp(_cameraPitch - delta.y * lookSensitivity, minCameraPitch, maxCameraPitch);
         }
 
@@ -316,20 +319,24 @@ namespace LittlePlanet.HybridTerraform
             }
 
             var up = GetPlanetUp(shipRoot.position);
+            var shipForward = GetShipForward(up);
             var velocity = Vector3.zero;
+            var forwardVelocity = Vector3.zero;
 
             if (autoForward)
             {
-                velocity += ProjectOnSurface(controlledCamera.transform.forward, up) * forwardSpeed;
+                forwardVelocity += shipForward * forwardSpeed;
             }
 
             if (TryGetMoveInput(out var moveInput))
             {
-                var forward = ProjectOnSurface(controlledCamera.transform.forward, up);
+                var forward = shipForward;
                 var right = ProjectOnSurface(controlledCamera.transform.right, up);
-                velocity += forward * (moveInput.y * forwardSpeed);
+                forwardVelocity += forward * (moveInput.y * forwardSpeed);
                 velocity += right * (moveInput.x * strafeSpeed);
             }
+
+            velocity += forwardVelocity;
 
             if (IsEscapePressed())
             {
@@ -337,9 +344,9 @@ namespace LittlePlanet.HybridTerraform
             }
 
             shipRoot.position += velocity * Time.deltaTime;
-            if (velocity.sqrMagnitude > 0.000001f)
+            if (forwardVelocity.sqrMagnitude > 0.000001f)
             {
-                _lastShipForward = ProjectOnSurface(velocity, up);
+                _lastShipForward = ProjectOnSurface(forwardVelocity, up);
             }
 
             var distanceFromCenter = Vector3.Distance(shipRoot.position, planet.transform.position);
