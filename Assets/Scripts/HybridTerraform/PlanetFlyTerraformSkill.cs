@@ -36,6 +36,7 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField] private PlanetCameraController orbitCameraController;
         [SerializeField] private Collider planetSurfaceCollider;
         [SerializeField] private Transform shipRoot;
+        [SerializeField] private Material runtimeShipMaterial;
         [SerializeField] private Button activateButton;
         [SerializeField] private TMP_Text statusText;
 
@@ -713,7 +714,46 @@ namespace LittlePlanet.HybridTerraform
             var shipObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             shipObject.name = "TerraformShip_Runtime";
             shipObject.transform.localScale = Vector3.one * 0.5f;
+            ApplyRuntimeShipMaterial(shipObject);
             shipRoot = shipObject.transform;
+        }
+
+        private void ApplyRuntimeShipMaterial(GameObject shipObject)
+        {
+            if (shipObject == null || !shipObject.TryGetComponent<Renderer>(out var renderer))
+            {
+                return;
+            }
+
+            renderer.sharedMaterial = runtimeShipMaterial != null
+                ? runtimeShipMaterial
+                : CreateDefaultRuntimeShipMaterial();
+        }
+
+        private static Material CreateDefaultRuntimeShipMaterial()
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Lit")
+                ?? Shader.Find("Universal Render Pipeline/Unlit")
+                ?? Shader.Find("Sprites/Default")
+                ?? Shader.Find("Standard");
+
+            var material = new Material(shader)
+            {
+                name = "TerraformShip_RuntimeMaterial"
+            };
+
+            var color = new Color(0.72f, 0.74f, 0.72f, 1f);
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", color);
+            }
+
+            if (material.HasProperty("_Color"))
+            {
+                material.SetColor("_Color", color);
+            }
+
+            return material;
         }
 
         private void CacheShipState()
