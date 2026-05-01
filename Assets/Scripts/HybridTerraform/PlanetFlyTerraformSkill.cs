@@ -28,9 +28,10 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField] private TMP_Text statusText;
 
         [Header("Skill")]
-        [SerializeField, Min(1f)] private float flightDuration = 120f;
+        [SerializeField, Min(30f)] private float flightDuration = 180f;
         [SerializeField, Min(0f)] private float cooldownDuration = 15f;
-        [SerializeField, Min(0.1f)] private float approachSpeed = 20f;
+        [SerializeField, Min(0.1f)] private float approachDuration = 1.25f;
+        [SerializeField, Min(0.1f)] private float approachSpeed = 80f;
         [SerializeField, Min(0.05f)] private float approachStopDistance = 0.25f;
 
         [Header("Flight")]
@@ -55,7 +56,9 @@ namespace LittlePlanet.HybridTerraform
         private float _pendingCurrency;
         private Vector3 _savedCameraPosition;
         private Quaternion _savedCameraRotation;
+        private Vector3 _approachStartPosition;
         private Tile _approachTile;
+        private float _approachStartTime;
         private bool _savedOrbitCameraEnabled = true;
         private bool _savedOrbitZoomEnabled = true;
         private bool _orbitControlsCached;
@@ -112,6 +115,18 @@ namespace LittlePlanet.HybridTerraform
             UpdateStatusText();
         }
 
+        private void OnValidate()
+        {
+            flightDuration = Mathf.Max(30f, flightDuration);
+            cooldownDuration = Mathf.Max(0f, cooldownDuration);
+            approachDuration = Mathf.Max(0.1f, approachDuration);
+            approachSpeed = Mathf.Max(0.1f, approachSpeed);
+            approachStopDistance = Mathf.Max(0.05f, approachStopDistance);
+            hoverAltitude = Mathf.Max(0.05f, hoverAltitude);
+            magnetRange = Mathf.Max(0.1f, magnetRange);
+            detachDistance = Mathf.Max(0.5f, detachDistance);
+        }
+
         public void ActivateSkill()
         {
             if (_state != SkillState.Ready || Time.time < _cooldownEndTime)
@@ -149,8 +164,10 @@ namespace LittlePlanet.HybridTerraform
 
             _savedCameraPosition = controlledCamera.transform.position;
             _savedCameraRotation = controlledCamera.transform.rotation;
-            _flightEndTime = Time.time + flightDuration;
-            _cooldownEndTime = _flightEndTime + cooldownDuration;
+            _approachStartPosition = _savedCameraPosition;
+            _approachStartTime = Time.time;
+            _flightEndTime = 0f;
+            _cooldownEndTime = 0f;
             _pendingCurrency = 0f;
             _approachTile = tile;
             SetOrbitCameraEnabled(false);
@@ -167,12 +184,6 @@ namespace LittlePlanet.HybridTerraform
                 return;
             }
 
-            if (Time.time >= _flightEndTime)
-            {
-                FinishFlight(restoreCamera: true);
-                return;
-            }
-
             if (_approachTile == null)
             {
                 FinishFlight(restoreCamera: true);
@@ -180,17 +191,27 @@ namespace LittlePlanet.HybridTerraform
             }
 
             var targetPosition = GetFlyTargetPosition(_approachTile);
+            var durationT = Mathf.Clamp01((Time.time - _approachStartTime) / approachDuration);
+            var easedT = durationT * durationT * (3f - 2f * durationT);
+            var lerpPosition = Vector3.Lerp(_approachStartPosition, targetPosition, easedT);
             controlledCamera.transform.position = Vector3.MoveTowards(
-                controlledCamera.transform.position,
+                lerpPosition,
                 targetPosition,
                 approachSpeed * Time.deltaTime);
 
             LookAtApproachTarget(targetPosition);
 
-            if (Vector3.Distance(controlledCamera.transform.position, targetPosition) <= approachStopDistance)
+            if (durationT >= 1f || Vector3.Distance(controlledCamera.transform.position, targetPosition) <= approachStopDistance)
             {
-                _state = SkillState.Flying;
+                StartFlying();
             }
+        }
+
+        private void StartFlying()
+        {
+            _flightEndTime = Time.time + flightDuration;
+            _cooldownEndTime = _flightEndTime + cooldownDuration;
+            _state = SkillState.Flying;
         }
 
         private void UpdateFlight()

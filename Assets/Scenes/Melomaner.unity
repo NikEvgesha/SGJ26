@@ -153,17 +153,18 @@ MonoBehaviour:
   orbitCameraController: {fileID: 1369439321}
   activateButton: {fileID: 405909412}
   statusText: {fileID: 1093340668}
-  flightDuration: 60
+  flightDuration: 180
   cooldownDuration: 15
-  approachSpeed: 12
+  approachDuration: 1.25
+  approachSpeed: 80
   approachStopDistance: 0.25
   autoForward: 1
   forwardSpeed: 4
   strafeSpeed: 4
   escapeSpeed: 8
   lookSensitivity: 0.12
-  hoverAltitude: 0.8
-  magnetRange: 2.5
+  hoverAltitude: 0.35
+  magnetRange: 4
   detachDistance: 8
   surfaceAlignLerp: 0.2
   terraformRadius: 2
