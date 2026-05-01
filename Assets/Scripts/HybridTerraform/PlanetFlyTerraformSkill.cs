@@ -20,6 +20,16 @@ namespace LittlePlanet.HybridTerraform
             Cooldown
         }
 
+        private enum FinishReason
+        {
+            Cancelled,
+            MissingReferencesDuringApproach,
+            MissingApproachTile,
+            MissingReferencesDuringFlight,
+            DurationExpired,
+            DetachDistanceExceeded
+        }
+
         [Header("References")]
         [SerializeField] private Planet planet;
         [SerializeField] private Camera controlledCamera;
@@ -49,6 +59,9 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField, Range(1, 12)] private int terraformRadius = 2;
         [SerializeField, Min(0f)] private float terraformPowerPerSecond = 0.18f;
         [SerializeField, Min(0f)] private float currencyPerCompletedTile = 25f;
+
+        [Header("Debug")]
+        [SerializeField] private bool logSkillLifecycle = true;
 
         private SkillState _state = SkillState.Ready;
         private float _flightEndTime;
@@ -137,6 +150,7 @@ namespace LittlePlanet.HybridTerraform
             _state = SkillState.Aiming;
             CacheOrbitControls();
             SetOrbitZoomEnabled(false);
+            LogSkill("Activated. Waiting for planet click.");
             UpdateStatusText();
         }
 
@@ -144,7 +158,7 @@ namespace LittlePlanet.HybridTerraform
         {
             if (_state == SkillState.Approaching || _state == SkillState.Flying)
             {
-                FinishFlight(restoreCamera: true);
+                FinishFlight(FinishReason.Cancelled, restoreCamera: true);
                 return;
             }
 
@@ -174,19 +188,20 @@ namespace LittlePlanet.HybridTerraform
             SetOrbitZoomEnabled(false);
 
             _state = SkillState.Approaching;
+            LogSkill($"Approach started. tile={tile.Index}, flightDuration={flightDuration:0.##}, approachDuration={approachDuration:0.##}");
         }
 
         private void UpdateApproach()
         {
             if (planet == null || controlledCamera == null)
             {
-                FinishFlight(restoreCamera: true);
+                FinishFlight(FinishReason.MissingReferencesDuringApproach, restoreCamera: true);
                 return;
             }
 
             if (_approachTile == null)
             {
-                FinishFlight(restoreCamera: true);
+                FinishFlight(FinishReason.MissingApproachTile, restoreCamera: true);
                 return;
             }
 
@@ -212,19 +227,20 @@ namespace LittlePlanet.HybridTerraform
             _flightEndTime = Time.time + flightDuration;
             _cooldownEndTime = _flightEndTime + cooldownDuration;
             _state = SkillState.Flying;
+            LogSkill($"Flying started. endsIn={flightDuration:0.##}s");
         }
 
         private void UpdateFlight()
         {
             if (planet == null || controlledCamera == null)
             {
-                FinishFlight(restoreCamera: true);
+                FinishFlight(FinishReason.MissingReferencesDuringFlight, restoreCamera: true);
                 return;
             }
 
             if (Time.time >= _flightEndTime)
             {
-                FinishFlight(restoreCamera: true);
+                FinishFlight(FinishReason.DurationExpired, restoreCamera: true);
                 return;
             }
 
@@ -289,7 +305,7 @@ namespace LittlePlanet.HybridTerraform
             var distanceFromCenter = Vector3.Distance(cameraTransform.position, planet.transform.position);
             if (distanceFromCenter >= planet.Radius + detachDistance)
             {
-                FinishFlight(restoreCamera: true);
+                FinishFlight(FinishReason.DetachDistanceExceeded, restoreCamera: true);
             }
         }
 
@@ -342,8 +358,10 @@ namespace LittlePlanet.HybridTerraform
             _pendingCurrency -= wholeCurrency;
         }
 
-        private void FinishFlight(bool restoreCamera)
+        private void FinishFlight(FinishReason reason, bool restoreCamera)
         {
+            LogSkill($"Finished. reason={reason}, restoreCamera={restoreCamera}");
+
             if (restoreCamera && controlledCamera != null)
             {
                 controlledCamera.transform.SetPositionAndRotation(_savedCameraPosition, _savedCameraRotation);
@@ -352,6 +370,33 @@ namespace LittlePlanet.HybridTerraform
             RestoreOrbitControls();
             _approachTile = null;
             _state = Time.time < _cooldownEndTime ? SkillState.Cooldown : SkillState.Ready;
+        }
+
+        private void LogSkill(string message)
+        {
+            if (!logSkillLifecycle)
+            {
+                return;
+            }
+
+            Debug.Log($"[PlanetFlyTerraformSkill] {message} {BuildDebugSnapshot()}", this);
+        }
+
+        private string BuildDebugSnapshot()
+        {
+            var now = Time.time;
+            var flightRemaining = _flightEndTime > 0f ? Mathf.Max(0f, _flightEndTime - now) : 0f;
+            var cooldownRemaining = _cooldownEndTime > 0f ? Mathf.Max(0f, _cooldownEndTime - now) : 0f;
+            var cameraDistance = 0f;
+            var detachThreshold = 0f;
+
+            if (planet != null && controlledCamera != null)
+            {
+                cameraDistance = Vector3.Distance(controlledCamera.transform.position, planet.transform.position);
+                detachThreshold = planet.Radius + detachDistance;
+            }
+
+            return $"state={_state}, time={now:0.00}, flightLeft={flightRemaining:0.00}, cooldownLeft={cooldownRemaining:0.00}, cameraDistance={cameraDistance:0.00}, detachThreshold={detachThreshold:0.00}";
         }
 
         private void LookAtApproachTarget(Vector3 targetPosition)
