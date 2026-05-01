@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using LittlePlanet.RuntimeInput;
 using UnityEngine;
@@ -145,6 +146,7 @@ namespace LittlePlanet.PlanetSystem
         [Header("HUD")]
         [SerializeField] private TMP_Text currencyText;
         [SerializeField] private TMP_Text oceanIndexText;
+        [SerializeField] private Slider oceanIndexSlider;
         [SerializeField] private bool autoFindHudTexts = true;
         [SerializeField] private string currencyPanelObjectName = "Currency";
         [SerializeField] private string currencyAmountObjectName = "Amount";
@@ -158,6 +160,14 @@ namespace LittlePlanet.PlanetSystem
         [SerializeField] private float maxHumidity = 100f;
         [SerializeField] private float minAtmosphere = 0f;
         [SerializeField] private float maxAtmosphere = 100f;
+        [SerializeField] private bool enableConditionEffects = true;
+        [SerializeField, Range(0.01f, 1f)] private float greenConditionRadius = 0.33f;
+        [SerializeField, Range(0.01f, 1f)] private float blueConditionRadius = 0.66f;
+        [SerializeField, Min(0.1f)] private float conditionEffectsUpdateInterval = 1f;
+        [SerializeField, Min(1)] private int conditionEffectsTilesPerFrame = 128;
+        [SerializeField, Min(1)] private int waterContactTilesPerFrame = 128;
+        [SerializeField, Min(0f)] private float waterChangePerSecondNormalized = 0.003f;
+        [SerializeField, Min(0f)] private float terraformingDecayPerSecond = 0.003f;
 
         private readonly List<Tile> _tiles = new();
 
@@ -230,11 +240,18 @@ namespace LittlePlanet.PlanetSystem
         private readonly CurrencyWallet _currencyWallet = new(1000);
         private float _humidity;
         private float _atmosphere;
+        private float _lastConditionEffectsUpdateTime;
+        private Coroutine _conditionEffectsCoroutine;
+        private Coroutine _waterContactRebuildCoroutine;
+        private bool _waterContactRebuildRequested;
 
         public IReadOnlyList<Tile> Tiles => _tiles;
         public event Action<Tile> TileClicked;
+        public event Action PlanetGenerated;
         public float Radius => radius;
         public CurrencyWallet Currency => _currencyWallet;
+        public bool ClickTintEnabled { get; set; } = true;
+        public bool IsConditionsInGreenZone => GetConditionsDistance01() <= greenConditionRadius;
 
         private sealed class ClickTintWave
         {
@@ -275,6 +292,7 @@ namespace LittlePlanet.PlanetSystem
             HandleCurrencyAmountChanged(_currencyWallet.Amount);
             UpdateOceanIndexUi();
             UpdateConditionsInfoUi();
+            StartConditionEffectsCoroutine();
             BindAddWaterButtonIfNeeded();
             BindRegenerateButtonIfNeeded();
             BindAddClickPowerButtonIfNeeded();
@@ -300,6 +318,8 @@ namespace LittlePlanet.PlanetSystem
 
         private void OnDestroy()
         {
+            StopConditionEffectsCoroutine();
+            StopWaterContactRebuildCoroutine();
             _currencyWallet.AmountChanged -= HandleCurrencyAmountChanged;
             UnbindAddWaterButton();
             UnbindRegenerateButton();
@@ -330,6 +350,13 @@ namespace LittlePlanet.PlanetSystem
             {
                 maxAtmosphere = minAtmosphere;
             }
+            greenConditionRadius = Mathf.Clamp01(greenConditionRadius);
+            blueConditionRadius = Mathf.Clamp(blueConditionRadius, greenConditionRadius, 1f);
+            conditionEffectsUpdateInterval = Mathf.Max(0.1f, conditionEffectsUpdateInterval);
+            conditionEffectsTilesPerFrame = Mathf.Max(1, conditionEffectsTilesPerFrame);
+            waterContactTilesPerFrame = Mathf.Max(1, waterContactTilesPerFrame);
+            waterChangePerSecondNormalized = Mathf.Max(0f, waterChangePerSecondNormalized);
+            terraformingDecayPerSecond = Mathf.Max(0f, terraformingDecayPerSecond);
             highTileElevationThreshold = Mathf.Max(0f, highTileElevationThreshold);
             highlandMountainHeight = Mathf.Max(0f, highlandMountainHeight);
             highlandMountainEdgeFalloff = Mathf.Clamp01(highlandMountainEdgeFalloff);
@@ -358,6 +385,8 @@ namespace LittlePlanet.PlanetSystem
         [ContextMenu("Generate Planet")]
         public void Generate()
         {
+            StopConditionEffectsCoroutine();
+            StopWaterContactRebuildCoroutine();
             EnsureCoreComponents();
             EnsureHighlightComponents();
             EnsureWaterContactComponents();
@@ -377,6 +406,8 @@ namespace LittlePlanet.PlanetSystem
             ResetConditionsToMinimum();
             InitializeWaterIfNeeded(forceReset: true);
             UpdateConditionsInfoUi();
+            StartConditionEffectsCoroutine();
+            PlanetGenerated?.Invoke();
         }
 
         private void RandomizeGenerationSeeds()
@@ -404,6 +435,36 @@ namespace LittlePlanet.PlanetSystem
 
             var localPosition = GetTileSurfacePoint(tile.Index, tile.Center.normalized, tileElevation + extraOffset, true);
             return transform.TransformPoint(localPosition);
+        }
+
+        public Vector3 GetTileWorldSurfacePoint(Tile tile, Vector3 localDirection, float extraOffset = 0f, bool useTileCenterElevation = false)
+        {
+            if (tile == null || localDirection.sqrMagnitude <= 0.000001f)
+            {
+                return transform.position;
+            }
+
+            var localPosition = GetTileSurfacePoint(tile.Index, localDirection.normalized, tileElevation + extraOffset, useTileCenterElevation);
+            return transform.TransformPoint(localPosition);
+        }
+
+        public bool TryGetTileAtPointer(out Tile tile, out RaycastHit hit)
+        {
+            tile = null;
+            hit = default;
+
+            if (!TryGetPointerPosition(out var pointerPosition))
+            {
+                return false;
+            }
+
+            if (!TryRaycastTileAtPointer(pointerPosition, out var tileIndex, out hit) || tileIndex < 0 || tileIndex >= _tiles.Count)
+            {
+                return false;
+            }
+
+            tile = _tiles[tileIndex];
+            return tile != null;
         }
 
         public Tile FindNearestTile(Vector3 worldPosition)
@@ -452,6 +513,52 @@ namespace LittlePlanet.PlanetSystem
             }
 
             return Mathf.Clamp01(_tileTintCurrent[tile.Index]);
+        }
+
+        public bool IsHighlandTile(Tile tile)
+        {
+            if (tile == null || _isHighlandTile == null)
+            {
+                return false;
+            }
+
+            var index = tile.Index;
+            return index >= 0 && index < _isHighlandTile.Length && _isHighlandTile[index];
+        }
+
+        public bool IsTileWaterAffected(Tile tile)
+        {
+            if (tile == null || !manageWater || _currentWaterRadius <= 0f)
+            {
+                return false;
+            }
+
+            return IsTileWaterAffectedByIndex(tile.Index);
+        }
+
+        private bool IsTileWaterAffectedByIndex(int index)
+        {
+            if (!manageWater || _currentWaterRadius <= 0f)
+            {
+                return false;
+            }
+
+            if (index < 0 || _tileMinSurfaceRadius == null || _tileMaxSurfaceRadius == null)
+            {
+                return false;
+            }
+
+            if (index >= _tileMinSurfaceRadius.Length || index >= _tileMaxSurfaceRadius.Length)
+            {
+                return false;
+            }
+
+            const float tolerance = 0.001f;
+            var minRadius = _tileMinSurfaceRadius[index];
+            var maxRadius = _tileMaxSurfaceRadius[index];
+            var inContact = !(_currentWaterRadius + tolerance < minRadius || _currentWaterRadius - tolerance > maxRadius);
+            var underWater = _currentWaterRadius + tolerance >= maxRadius;
+            return inContact || underWater;
         }
 
         public float AddTerraformingInfluence(Tile sourceTile, int radiusInTiles, float influence)
@@ -538,6 +645,37 @@ namespace LittlePlanet.PlanetSystem
             ApplyWaterRadius();
         }
 
+        public void AddWaterNormalized(float normalizedDelta)
+        {
+            if (!manageWater || Mathf.Abs(normalizedDelta) <= 0.000001f)
+            {
+                return;
+            }
+
+            InitializeWaterIfNeeded(forceReset: false);
+            var maxWaterRadius = GetMaxWaterRadius();
+            if (maxWaterRadius <= 0.0001f)
+            {
+                return;
+            }
+
+            var minWaterRadius = GetMinWaterRadiusForOceanIndex(maxWaterRadius);
+            var targetRange = Mathf.Max(0f, maxWaterRadius - minWaterRadius);
+            if (targetRange <= 0.0001f)
+            {
+                return;
+            }
+
+            var nextRadius = Mathf.Clamp(_currentWaterRadius + normalizedDelta * targetRange, minWaterRadius, maxWaterRadius);
+            if (Mathf.Abs(nextRadius - _currentWaterRadius) <= 0.0001f)
+            {
+                return;
+            }
+
+            _currentWaterRadius = nextRadius;
+            ApplyWaterRadius();
+        }
+
         public void AddClickPower()
         {
             clickPower = Mathf.Clamp(clickPower + clickPowerStep, 0.05f, 1f);
@@ -559,6 +697,16 @@ namespace LittlePlanet.PlanetSystem
             SetHumidity(_humidity + delta);
         }
 
+        public void SetTemperature(float value)
+        {
+            SetHumidity(value);
+        }
+
+        public void AddTemperature(float delta)
+        {
+            AddHumidity(delta);
+        }
+
         public void SetAtmosphere(float value)
         {
             _atmosphere = Mathf.Clamp(value, minAtmosphere, maxAtmosphere);
@@ -568,6 +716,28 @@ namespace LittlePlanet.PlanetSystem
         public void AddAtmosphere(float delta)
         {
             SetAtmosphere(_atmosphere + delta);
+        }
+
+        public float GetConditionsDistance01()
+        {
+            var xNorm = NormalizeToSignedRange(_atmosphere, minAtmosphere, maxAtmosphere);
+            var yNorm = NormalizeToSignedRange(_humidity, minHumidity, maxHumidity);
+            return Mathf.Clamp01(new Vector2(xNorm, yNorm).magnitude);
+        }
+
+        public bool IsConditionsInRedZone()
+        {
+            return GetConditionsDistance01() > blueConditionRadius;
+        }
+
+        private static float NormalizeToSignedRange(float value, float min, float max)
+        {
+            if (max <= min)
+            {
+                return 0f;
+            }
+
+            return Mathf.InverseLerp(min, max, value) * 2f - 1f;
         }
 
         public void ToggleTileInfoMode()
@@ -851,7 +1021,10 @@ namespace LittlePlanet.PlanetSystem
             }
 
             TileClicked?.Invoke(tile);
-            AddClickTintInfluence(tile);
+            if (ClickTintEnabled)
+            {
+                AddClickTintInfluence(tile);
+            }
         }
 
         private void AddClickTintInfluence(Tile selectedTile)
@@ -921,13 +1094,13 @@ namespace LittlePlanet.PlanetSystem
                 return;
             }
 
-            _changedTintTiles.Clear();
             ProcessAllClickTintWaves();
 
             if (_changedTintTiles.Count > 0 || _clickTintDirty || !_highlightMeshGeometryBuilt)
             {
                 BuildHighlightMesh();
                 _clickTintDirty = false;
+                _changedTintTiles.Clear();
             }
         }
 
@@ -1490,7 +1663,40 @@ namespace LittlePlanet.PlanetSystem
 
             if (!manageWater || _currentWaterRadius <= 0f || _tiles.Count == 0 || _tileMinSurfaceRadius == null || _tileMaxSurfaceRadius == null)
             {
+                StopWaterContactRebuildCoroutine();
                 ClearWaterContactMesh();
+                return;
+            }
+
+            _waterContactRebuildRequested = true;
+            if (!Application.isPlaying)
+            {
+                _waterContactRebuildRequested = false;
+                RebuildWaterContactMeshImmediate(_currentWaterRadius);
+                return;
+            }
+
+            if (_waterContactRebuildCoroutine == null)
+            {
+                _waterContactRebuildCoroutine = StartCoroutine(RebuildWaterContactMeshAsync());
+            }
+        }
+
+        private IEnumerator RebuildWaterContactMeshAsync()
+        {
+            while (_waterContactRebuildRequested)
+            {
+                _waterContactRebuildRequested = false;
+                yield return RebuildWaterContactMeshPassAsync(_currentWaterRadius);
+            }
+
+            _waterContactRebuildCoroutine = null;
+        }
+
+        private void RebuildWaterContactMeshImmediate(float waterRadius)
+        {
+            if (_waterContactMesh == null || _waterContactMeshFilter == null || _waterContactMeshRenderer == null)
+            {
                 return;
             }
 
@@ -1515,23 +1721,85 @@ namespace LittlePlanet.PlanetSystem
 
                 var minRadius = _tileMinSurfaceRadius[i];
                 var maxRadius = _tileMaxSurfaceRadius[i];
-                var inContact = !(_currentWaterRadius + contactTolerance < minRadius || _currentWaterRadius - contactTolerance > maxRadius);
-                var underWater = _currentWaterRadius + contactTolerance >= maxRadius;
-                if (inContact)
+                var inContact = !(waterRadius + contactTolerance < minRadius || waterRadius - contactTolerance > maxRadius);
+                var underWater = waterRadius + contactTolerance >= maxRadius;
+                if (!inContact && !underWater)
+                {
+                    continue;
+                }
+
+                _waterTouchedTiles[i] = true;
+                tintChangedByWater |= SetTileTintToFull(i);
+                AppendTileFan(_tiles[i], triangles, vertices, uvs, waterContactSurfaceOffset);
+            }
+
+            ApplyWaterContactMeshData(vertices, uvs, triangles, tintChangedByWater);
+        }
+
+        private IEnumerator RebuildWaterContactMeshPassAsync(float waterRadius)
+        {
+            if (_waterContactMesh == null || _waterContactMeshFilter == null || _waterContactMeshRenderer == null)
+            {
+                yield break;
+            }
+
+            if (_waterTouchedTiles == null || _waterTouchedTiles.Length != _tiles.Count)
+            {
+                _waterTouchedTiles = new bool[_tiles.Count];
+            }
+
+            var vertices = new List<Vector3>(128);
+            var uvs = new List<Vector2>(128);
+            var triangles = new List<int>(256);
+            const float contactTolerance = 0.001f;
+            var tintChangedByWater = false;
+            EnsureClickTintArrays();
+            var processedThisFrame = 0;
+
+            for (var i = 0; i < _tiles.Count; i++)
+            {
+                processedThisFrame++;
+                if (i >= _tileMinSurfaceRadius.Length || i >= _tileMaxSurfaceRadius.Length)
+                {
+                    break;
+                }
+
+                var minRadius = _tileMinSurfaceRadius[i];
+                var maxRadius = _tileMaxSurfaceRadius[i];
+                var inContact = !(waterRadius + contactTolerance < minRadius || waterRadius - contactTolerance > maxRadius);
+                var underWater = waterRadius + contactTolerance >= maxRadius;
+                if (inContact || underWater)
                 {
                     _waterTouchedTiles[i] = true;
                 }
 
-                var shouldAffectTile = _waterTouchedTiles[i] || inContact || underWater;
+                var shouldAffectTile = inContact || underWater;
                 if (!shouldAffectTile)
                 {
+                    if (processedThisFrame >= waterContactTilesPerFrame)
+                    {
+                        processedThisFrame = 0;
+                        yield return null;
+                    }
+
                     continue;
                 }
 
                 tintChangedByWater |= SetTileTintToFull(i);
                 AppendTileFan(_tiles[i], triangles, vertices, uvs, waterContactSurfaceOffset);
+
+                if (processedThisFrame >= waterContactTilesPerFrame)
+                {
+                    processedThisFrame = 0;
+                    yield return null;
+                }
             }
 
+            ApplyWaterContactMeshData(vertices, uvs, triangles, tintChangedByWater);
+        }
+
+        private void ApplyWaterContactMeshData(List<Vector3> vertices, List<Vector2> uvs, List<int> triangles, bool tintChangedByWater)
+        {
             if (tintChangedByWater)
             {
                 _clickTintDirty = true;
@@ -1558,6 +1826,18 @@ namespace LittlePlanet.PlanetSystem
 
             _waterContactMeshFilter.sharedMesh = _waterContactMesh;
             _waterContactMeshRenderer.enabled = true;
+        }
+
+        private void StopWaterContactRebuildCoroutine()
+        {
+            _waterContactRebuildRequested = false;
+            if (!Application.isPlaying || _waterContactRebuildCoroutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(_waterContactRebuildCoroutine);
+            _waterContactRebuildCoroutine = null;
         }
 
         private bool SetTileTintToFull(int tileIndex)
@@ -1761,6 +2041,11 @@ namespace LittlePlanet.PlanetSystem
             {
                 oceanIndexText = FindHudText(oceanIndexObjectName, oceanIndexObjectName);
             }
+
+            if (oceanIndexSlider == null)
+            {
+                oceanIndexSlider = FindHudSlider(oceanIndexObjectName);
+            }
         }
 
         private void EnsureConditionsInfoUiReference()
@@ -1827,6 +2112,22 @@ namespace LittlePlanet.PlanetSystem
             return panel.GetComponentInChildren<TMP_Text>(true);
         }
 
+        private static Slider FindHudSlider(string objectName)
+        {
+            if (string.IsNullOrWhiteSpace(objectName))
+            {
+                return null;
+            }
+
+            var target = GameObject.Find(objectName);
+            if (target == null)
+            {
+                return null;
+            }
+
+            return target.GetComponent<Slider>() ?? target.GetComponentInChildren<Slider>(true);
+        }
+
         private void HandleCurrencyAmountChanged(int amount)
         {
             if (currencyText == null)
@@ -1839,21 +2140,21 @@ namespace LittlePlanet.PlanetSystem
 
         private void UpdateOceanIndexUi()
         {
-            if (oceanIndexText == null)
+            if (oceanIndexText == null && oceanIndexSlider == null)
             {
                 return;
             }
 
             if (!manageWater)
             {
-                oceanIndexText.text = "0 %";
+                SetOceanIndexUiValue(0f);
                 return;
             }
 
             var maxRadius = GetMaxWaterRadius();
             if (maxRadius <= 0.0001f)
             {
-                oceanIndexText.text = "0 %";
+                SetOceanIndexUiValue(0f);
                 return;
             }
 
@@ -1868,7 +2169,21 @@ namespace LittlePlanet.PlanetSystem
                 percent = Mathf.InverseLerp(minRadius, maxRadius, _currentWaterRadius) * 100f;
             }
 
-            oceanIndexText.text = $"{Mathf.RoundToInt(Mathf.Clamp(percent, 0f, 100f))} %";
+            SetOceanIndexUiValue(percent);
+        }
+
+        private void SetOceanIndexUiValue(float percent)
+        {
+            var clampedPercent = Mathf.Clamp(percent, 0f, 100f);
+            if (oceanIndexText != null)
+            {
+                oceanIndexText.text = $"{Mathf.RoundToInt(clampedPercent)} %";
+            }
+
+            if (oceanIndexSlider != null)
+            {
+                oceanIndexSlider.SetValueWithoutNotify(clampedPercent / 100f);
+            }
         }
 
         private float GetMinWaterRadiusForOceanIndex(float maxRadius)
@@ -1907,6 +2222,134 @@ namespace LittlePlanet.PlanetSystem
         {
             _humidity = minHumidity;
             _atmosphere = minAtmosphere;
+        }
+
+        private void StartConditionEffectsCoroutine()
+        {
+            if (!Application.isPlaying || _conditionEffectsCoroutine != null)
+            {
+                return;
+            }
+
+            _conditionEffectsCoroutine = StartCoroutine(ConditionEffectsRoutine());
+        }
+
+        private void StopConditionEffectsCoroutine()
+        {
+            if (!Application.isPlaying || _conditionEffectsCoroutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(_conditionEffectsCoroutine);
+            _conditionEffectsCoroutine = null;
+            _lastConditionEffectsUpdateTime = 0f;
+        }
+
+        private IEnumerator ConditionEffectsRoutine()
+        {
+            while (true)
+            {
+                yield return new WaitForSeconds(conditionEffectsUpdateInterval);
+
+                if (!enableConditionEffects)
+                {
+                    _lastConditionEffectsUpdateTime = 0f;
+                    continue;
+                }
+
+                var now = Time.time;
+                var elapsed = _lastConditionEffectsUpdateTime > 0f
+                    ? Mathf.Max(0f, now - _lastConditionEffectsUpdateTime)
+                    : conditionEffectsUpdateInterval;
+                _lastConditionEffectsUpdateTime = now;
+                if (elapsed <= 0f)
+                {
+                    continue;
+                }
+
+                var conditionDistance = GetConditionsDistance01();
+                var isRedZone = conditionDistance > blueConditionRadius;
+                var waterDelta = waterChangePerSecondNormalized * elapsed * (isRedZone ? -1f : 1f);
+                AddWaterNormalized(waterDelta);
+
+                if (isRedZone)
+                {
+                    yield return DecayTerraformingAsync(terraformingDecayPerSecond * elapsed);
+                }
+            }
+        }
+
+        private IEnumerator DecayTerraformingAsync(float amount)
+        {
+            if (amount <= 0f || _tiles.Count == 0)
+            {
+                yield break;
+            }
+
+            EnsureClickTintArrays();
+            if (_tileTintCurrent == null || _tileTintTarget == null)
+            {
+                yield break;
+            }
+
+            var changed = false;
+            var processedThisFrame = 0;
+            var length = Mathf.Min(_tiles.Count, _tileTintCurrent.Length, _tileTintTarget.Length);
+            for (var i = 0; i < length; i++)
+            {
+                processedThisFrame++;
+                if (_isHighlandTile != null && i < _isHighlandTile.Length && _isHighlandTile[i])
+                {
+                    if (processedThisFrame >= conditionEffectsTilesPerFrame)
+                    {
+                        processedThisFrame = 0;
+                        yield return null;
+                    }
+
+                    continue;
+                }
+
+                if (IsTileWaterAffectedByIndex(i))
+                {
+                    if (processedThisFrame >= conditionEffectsTilesPerFrame)
+                    {
+                        processedThisFrame = 0;
+                        yield return null;
+                    }
+
+                    continue;
+                }
+
+                var previous = _tileTintCurrent[i];
+                if (previous <= 0.0001f)
+                {
+                    if (processedThisFrame >= conditionEffectsTilesPerFrame)
+                    {
+                        processedThisFrame = 0;
+                        yield return null;
+                    }
+
+                    continue;
+                }
+
+                var next = Mathf.Max(0f, previous - amount);
+                _tileTintCurrent[i] = next;
+                _tileTintTarget[i] = Mathf.Min(_tileTintTarget[i], next);
+                _changedTintTiles.Add(i);
+                changed = true;
+
+                if (processedThisFrame >= conditionEffectsTilesPerFrame)
+                {
+                    processedThisFrame = 0;
+                    yield return null;
+                }
+            }
+
+            if (changed)
+            {
+                _clickTintDirty = true;
+            }
         }
 
         public float GetTerraformingPercent()
@@ -2879,4 +3322,5 @@ namespace LittlePlanet.PlanetSystem
             return Vector3.Dot(triangleNormal, expectedNormal);
         }
     }
+
 }

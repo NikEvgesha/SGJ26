@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: aa1f7fd0a8a34de5a3d629fa9267c31a, type: 3}
+  m_Name: Green_reward
+  m_EditorClassIdentifier: Assembly-CSharp::UpgradeDefinition
+  upgradeName: "\u041D\u0430\u0433\u0440\u0430\u0434\u0430 \u0437\u0430 \u043E\u0437\u0435\u043B\u0435\u043D\u0435\u043D\u0438\u0435"
+  description: 
+  baseCost: 100
+  costMultiplier: 1.25
+  upgradeType: 2
+  maxLevel: 10
+  valuePerLevel: 1
+  icon: {fileID: 21300000, guid: 945054b3f36fc624fbf5776c71d564fb, type: 3}

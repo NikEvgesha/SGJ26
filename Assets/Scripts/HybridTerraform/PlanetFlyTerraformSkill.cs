@@ -40,11 +40,12 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField] private TMP_Text statusText;
 
         [Header("Skill")]
-        [SerializeField, Min(30f)] private float flightDuration = 180f;
+        [SerializeField, Min(5f)] private float flightDuration = 5f;
         [SerializeField, Min(0f)] private float cooldownDuration = 15f;
         [SerializeField, Min(0.1f)] private float approachDuration = 1.25f;
         [SerializeField, Min(0.1f)] private float approachSpeed = 80f;
         [SerializeField, Min(0.05f)] private float approachStopDistance = 0.25f;
+        [SerializeField, Min(0.1f)] private float buttonStateUpdateInterval = 1f;
 
         [Header("Flight")]
         [SerializeField] private bool autoForward = true;
@@ -95,6 +96,13 @@ namespace LittlePlanet.HybridTerraform
         private bool _savedOrbitCameraEnabled = true;
         private bool _savedOrbitZoomEnabled = true;
         private bool _orbitControlsCached;
+        private float _nextButtonStateUpdateTime;
+        public bool IsFlightModeActive => _state == SkillState.Flying || _state == SkillState.Approaching;
+        public float FlightDuration => flightDuration;
+        public float CooldownDuration => cooldownDuration;
+        public int TerraformRadius => terraformRadius;
+        public float TerraformPowerPerSecond => terraformPowerPerSecond;
+        public float CurrencyPerCompletedTile => currencyPerCompletedTile;
 
         private void Awake()
         {
@@ -150,11 +158,12 @@ namespace LittlePlanet.HybridTerraform
 
         private void OnValidate()
         {
-            flightDuration = Mathf.Max(30f, flightDuration);
+            flightDuration = Mathf.Max(5f, flightDuration);
             cooldownDuration = Mathf.Max(0f, cooldownDuration);
             approachDuration = Mathf.Max(0.1f, approachDuration);
             approachSpeed = Mathf.Max(0.1f, approachSpeed);
             approachStopDistance = Mathf.Max(0.05f, approachStopDistance);
+            buttonStateUpdateInterval = Mathf.Max(0.1f, buttonStateUpdateInterval);
             hoverAltitude = Mathf.Max(0.05f, hoverAltitude);
             magnetRange = Mathf.Max(0.1f, magnetRange);
             detachDistance = Mathf.Max(0.5f, detachDistance);
@@ -184,6 +193,41 @@ namespace LittlePlanet.HybridTerraform
             SetOrbitZoomEnabled(false);
             LogSkill("Activated. Waiting for planet click.");
             UpdateStatusText();
+        }
+
+        public float GetUpgradeValue(UpgradeType upgradeType)
+        {
+            return upgradeType switch
+            {
+                UpgradeType.FlyPower => terraformPowerPerSecond,
+                UpgradeType.FlyRadius => terraformRadius,
+                UpgradeType.GreenReward => currencyPerCompletedTile,
+                UpgradeType.FlyDuration => flightDuration,
+                UpgradeType.FlyCooldown => cooldownDuration,
+                _ => 0f
+            };
+        }
+
+        public void AddUpgradeValue(UpgradeType upgradeType, float value)
+        {
+            switch (upgradeType)
+            {
+                case UpgradeType.FlyPower:
+                    terraformPowerPerSecond = Mathf.Max(0f, terraformPowerPerSecond + value);
+                    break;
+                case UpgradeType.FlyRadius:
+                    terraformRadius = Mathf.Clamp(Mathf.RoundToInt(terraformRadius + value), 1, 12);
+                    break;
+                case UpgradeType.GreenReward:
+                    currencyPerCompletedTile = Mathf.Max(0f, currencyPerCompletedTile + value);
+                    break;
+                case UpgradeType.FlyDuration:
+                    flightDuration = Mathf.Max(5f, flightDuration + value);
+                    break;
+                case UpgradeType.FlyCooldown:
+                    cooldownDuration = Mathf.Max(0f, cooldownDuration - value);
+                    break;
+            }
         }
 
         public void CancelSkill()
@@ -773,7 +817,14 @@ namespace LittlePlanet.HybridTerraform
                 return;
             }
 
-            activateButton.interactable = _state == SkillState.Ready && Time.time >= _cooldownEndTime;
+            if (Time.time < _nextButtonStateUpdateTime)
+            {
+                return;
+            }
+
+            _nextButtonStateUpdateTime = Time.time + buttonStateUpdateInterval;
+            activateButton.interactable = _state == SkillState.Ready
+                                          && Time.time >= _cooldownEndTime;
         }
 
         private void UpdateStatusText()

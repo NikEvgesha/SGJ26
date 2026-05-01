@@ -6,6 +6,7 @@ public class ConditionsInfoUI : MonoBehaviour
 {
     [Header("References")]
     [SerializeField] private TMP_Text terraformingPercentText;
+    [SerializeField] private Slider terraformingSlider;
     [SerializeField] private RectTransform heatAtmosphereInfoRoot;
     [SerializeField] private RectTransform circleRect;
     [SerializeField] private RectTransform indicatorRect;
@@ -37,12 +38,21 @@ public class ConditionsInfoUI : MonoBehaviour
     public void SetTerraformingPercent(float percent)
     {
         EnsureReferences();
-        if (terraformingPercentText == null)
+        if (terraformingPercentText == null && terraformingSlider == null)
         {
             return;
         }
 
-        terraformingPercentText.text = $"{Mathf.RoundToInt(Mathf.Clamp(percent, 0f, 100f))} %";
+        var clampedPercent = Mathf.Clamp(percent, 0f, 100f);
+        if (terraformingPercentText != null)
+        {
+            terraformingPercentText.text = $"{Mathf.RoundToInt(clampedPercent)} %";
+        }
+
+        if (terraformingSlider != null)
+        {
+            terraformingSlider.SetValueWithoutNotify(clampedPercent / 100f);
+        }
     }
 
     public void SetConditions(
@@ -87,6 +97,11 @@ public class ConditionsInfoUI : MonoBehaviour
                 terraformingPercentText = FindText(terraformingValueObjectName);
             }
 
+            if (terraformingSlider == null)
+            {
+                terraformingSlider = FindSlider(terraformingValueObjectName);
+            }
+
             if (heatAtmosphereInfoRoot == null)
             {
                 heatAtmosphereInfoRoot = FindRect(heatAtmosphereInfoObjectName);
@@ -124,6 +139,22 @@ public class ConditionsInfoUI : MonoBehaviour
         }
 
         return rect.GetComponent<TMP_Text>() ?? rect.GetComponentInChildren<TMP_Text>(true);
+    }
+
+    private Slider FindSlider(string objectName)
+    {
+        if (string.IsNullOrWhiteSpace(objectName))
+        {
+            return null;
+        }
+
+        var rect = FindRect(objectName);
+        if (rect == null)
+        {
+            return null;
+        }
+
+        return rect.GetComponent<Slider>() ?? rect.GetComponentInChildren<Slider>(true);
     }
 
     private RectTransform FindRect(string objectName)
