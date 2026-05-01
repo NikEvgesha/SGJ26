@@ -34,6 +34,7 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField] private Planet planet;
         [SerializeField] private Camera controlledCamera;
         [SerializeField] private PlanetCameraController orbitCameraController;
+        [SerializeField] private Collider planetSurfaceCollider;
         [SerializeField] private Transform shipRoot;
         [SerializeField] private Button activateButton;
         [SerializeField] private TMP_Text statusText;
@@ -57,6 +58,7 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField, Min(0.5f)] private float detachDistance = 8f;
         [SerializeField, Min(0.1f)] private float surfaceFollowSpeed = 8f;
         [SerializeField, Min(0.1f)] private float shipRotationFollowSpeed = 10f;
+        [SerializeField, Min(1f)] private float surfaceProbePadding = 10f;
 
         [Header("Third Person Camera")]
         [SerializeField, Min(0.5f)] private float cameraFollowDistance = 6f;
@@ -159,6 +161,7 @@ namespace LittlePlanet.HybridTerraform
             detachDistance = Mathf.Max(0.5f, detachDistance);
             surfaceFollowSpeed = Mathf.Max(0.1f, surfaceFollowSpeed);
             shipRotationFollowSpeed = Mathf.Max(0.1f, shipRotationFollowSpeed);
+            surfaceProbePadding = Mathf.Max(1f, surfaceProbePadding);
             maxLookDeltaPerFrame = Mathf.Max(1f, maxLookDeltaPerFrame);
             cameraFollowDistance = Mathf.Max(0.5f, cameraFollowDistance);
             cameraFollowHeight = Mathf.Max(0f, cameraFollowHeight);
@@ -297,8 +300,11 @@ namespace LittlePlanet.HybridTerraform
 
         private Vector3 GetFlyTargetPosition(Tile tile)
         {
-            var surfacePosition = planet.GetTileWorldSurfaceCenter(tile);
-            var normal = (surfacePosition - planet.transform.position).normalized;
+            var fallbackSurfacePosition = planet.GetTileWorldSurfaceCenter(tile);
+            var normal = (fallbackSurfacePosition - planet.transform.position).normalized;
+            var surfacePosition = TryGetPlanetSurfacePoint(normal, out var raycastSurfacePosition)
+                ? raycastSurfacePosition
+                : fallbackSurfacePosition;
             return surfacePosition + normal * hoverAltitude;
         }
 
@@ -366,15 +372,19 @@ namespace LittlePlanet.HybridTerraform
                 return;
             }
 
-            var nearestTile = planet.FindNearestTile(shipRoot.position);
-            if (nearestTile == null)
+            var center = planet.transform.position;
+            var normal = GetPlanetUp(shipRoot.position);
+            if (!TryGetPlanetSurfacePoint(normal, out var surfacePosition))
             {
-                return;
+                var nearestTile = planet.FindNearestTile(shipRoot.position);
+                if (nearestTile == null)
+                {
+                    return;
+                }
+
+                surfacePosition = planet.GetTileWorldSurfaceCenter(nearestTile);
             }
 
-            var center = planet.transform.position;
-            var surfacePosition = planet.GetTileWorldSurfaceCenter(nearestTile);
-            var normal = GetPlanetUp(shipRoot.position);
             var surfaceRadius = Vector3.Distance(surfacePosition, center);
             var currentRadius = Vector3.Distance(shipRoot.position, center);
             if (currentRadius > surfaceRadius + magnetRange || IsEscapePressed())
@@ -495,6 +505,34 @@ namespace LittlePlanet.HybridTerraform
             return shipRoot.position + up * cameraFollowHeight + cameraDirection.normalized * cameraFollowDistance;
         }
 
+        private bool TryGetPlanetSurfacePoint(Vector3 normal, out Vector3 surfacePosition)
+        {
+            surfacePosition = default;
+            ResolvePlanetSurfaceCollider();
+            if (planet == null || planetSurfaceCollider == null || normal.sqrMagnitude <= 0.000001f)
+            {
+                return false;
+            }
+
+            var center = planet.transform.position;
+            var currentDistance = shipRoot != null
+                ? Vector3.Distance(shipRoot.position, center)
+                : planet.Radius;
+            var originDistance = Mathf.Max(
+                currentDistance + surfaceProbePadding,
+                planet.Radius + detachDistance + magnetRange + hoverAltitude + surfaceProbePadding);
+
+            var ray = new Ray(center + normal.normalized * originDistance, -normal.normalized);
+            var rayDistance = originDistance + surfaceProbePadding;
+            if (!planetSurfaceCollider.Raycast(ray, out var hit, rayDistance))
+            {
+                return false;
+            }
+
+            surfacePosition = hit.point;
+            return true;
+        }
+
         private void LookAtShip()
         {
             if (controlledCamera == null || shipRoot == null)
@@ -604,6 +642,18 @@ namespace LittlePlanet.HybridTerraform
             {
                 orbitCameraController = FindFirstObjectByType<PlanetCameraController>();
             }
+
+            ResolvePlanetSurfaceCollider();
+        }
+
+        private void ResolvePlanetSurfaceCollider()
+        {
+            if (planetSurfaceCollider != null || planet == null)
+            {
+                return;
+            }
+
+            planetSurfaceCollider = planet.GetComponent<Collider>();
         }
 
         private void EnsureShipRoot()
