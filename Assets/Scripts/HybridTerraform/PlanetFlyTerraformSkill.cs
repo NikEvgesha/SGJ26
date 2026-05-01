@@ -55,13 +55,14 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField, Min(0.05f)] private float hoverAltitude = 0.35f;
         [SerializeField, Min(0.1f)] private float magnetRange = 4f;
         [SerializeField, Min(0.5f)] private float detachDistance = 8f;
-        [SerializeField, Range(0.01f, 1f)] private float surfaceAlignLerp = 0.2f;
+        [SerializeField, Min(0.1f)] private float surfaceFollowSpeed = 8f;
+        [SerializeField, Min(0.1f)] private float shipRotationFollowSpeed = 10f;
 
         [Header("Third Person Camera")]
         [SerializeField, Min(0.5f)] private float cameraFollowDistance = 6f;
         [SerializeField, Min(0f)] private float cameraFollowHeight = 2f;
         [SerializeField, Min(0f)] private float cameraLookAtHeight = 0.6f;
-        [SerializeField, Range(0.01f, 1f)] private float cameraFollowLerp = 0.25f;
+        [SerializeField, Min(0.1f)] private float cameraFollowSpeed = 12f;
         [SerializeField, Range(-80f, 20f)] private float initialCameraPitch = -18f;
         [SerializeField, Range(-85f, 45f)] private float minCameraPitch = -65f;
         [SerializeField, Range(-45f, 85f)] private float maxCameraPitch = 25f;
@@ -156,11 +157,13 @@ namespace LittlePlanet.HybridTerraform
             hoverAltitude = Mathf.Max(0.05f, hoverAltitude);
             magnetRange = Mathf.Max(0.1f, magnetRange);
             detachDistance = Mathf.Max(0.5f, detachDistance);
+            surfaceFollowSpeed = Mathf.Max(0.1f, surfaceFollowSpeed);
+            shipRotationFollowSpeed = Mathf.Max(0.1f, shipRotationFollowSpeed);
             maxLookDeltaPerFrame = Mathf.Max(1f, maxLookDeltaPerFrame);
             cameraFollowDistance = Mathf.Max(0.5f, cameraFollowDistance);
             cameraFollowHeight = Mathf.Max(0f, cameraFollowHeight);
             cameraLookAtHeight = Mathf.Max(0f, cameraLookAtHeight);
-            cameraFollowLerp = Mathf.Clamp01(cameraFollowLerp);
+            cameraFollowSpeed = Mathf.Max(0.1f, cameraFollowSpeed);
             if (maxCameraPitch < minCameraPitch)
             {
                 maxCameraPitch = minCameraPitch;
@@ -371,7 +374,7 @@ namespace LittlePlanet.HybridTerraform
 
             var center = planet.transform.position;
             var surfacePosition = planet.GetTileWorldSurfaceCenter(nearestTile);
-            var normal = (surfacePosition - center).normalized;
+            var normal = GetPlanetUp(shipRoot.position);
             var surfaceRadius = Vector3.Distance(surfacePosition, center);
             var currentRadius = Vector3.Distance(shipRoot.position, center);
             if (currentRadius > surfaceRadius + magnetRange || IsEscapePressed())
@@ -381,7 +384,7 @@ namespace LittlePlanet.HybridTerraform
             }
 
             var targetPosition = center + normal * (surfaceRadius + hoverAltitude);
-            shipRoot.position = Vector3.Lerp(shipRoot.position, targetPosition, surfaceAlignLerp);
+            shipRoot.position = Vector3.Lerp(shipRoot.position, targetPosition, GetFrameLerp(surfaceFollowSpeed));
             AlignShipRotation(normal);
         }
 
@@ -473,7 +476,7 @@ namespace LittlePlanet.HybridTerraform
             controlledCamera.transform.position = Vector3.Lerp(
                 controlledCamera.transform.position,
                 GetDesiredCameraPosition(),
-                cameraFollowLerp);
+                GetFrameLerp(cameraFollowSpeed));
             LookAtShip();
         }
 
@@ -508,7 +511,7 @@ namespace LittlePlanet.HybridTerraform
             }
 
             var targetRotation = Quaternion.LookRotation(toTarget.normalized, up);
-            controlledCamera.transform.rotation = Quaternion.Slerp(controlledCamera.transform.rotation, targetRotation, cameraFollowLerp);
+            controlledCamera.transform.rotation = Quaternion.Slerp(controlledCamera.transform.rotation, targetRotation, GetFrameLerp(cameraFollowSpeed));
         }
 
         private void PlaceShipAtTile(Tile tile)
@@ -541,7 +544,7 @@ namespace LittlePlanet.HybridTerraform
             }
 
             var forward = GetShipForward(up);
-            shipRoot.rotation = Quaternion.Slerp(shipRoot.rotation, Quaternion.LookRotation(forward, up), surfaceAlignLerp);
+            shipRoot.rotation = Quaternion.Slerp(shipRoot.rotation, Quaternion.LookRotation(forward, up), GetFrameLerp(shipRotationFollowSpeed));
         }
 
         private Vector3 GetShipForward(Vector3 up)
@@ -578,6 +581,11 @@ namespace LittlePlanet.HybridTerraform
         {
             var projected = Vector3.ProjectOnPlane(direction, up);
             return projected.sqrMagnitude > 0.000001f ? projected.normalized : Vector3.zero;
+        }
+
+        private static float GetFrameLerp(float speed)
+        {
+            return 1f - Mathf.Exp(-Mathf.Max(0.01f, speed) * Time.deltaTime);
         }
 
         private void ResolveReferences()
