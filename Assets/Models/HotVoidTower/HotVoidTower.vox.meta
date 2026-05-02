@@ -1,0 +1,61 @@
+fileFormatVersion: 2
+guid: e1fc59c0213830d4186587c534acf803
+ScriptedImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 2
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+  script: {fileID: 11500000, guid: eeb34f3ead148d04e8630fc3f79cbc1a, type: 3}
+  dataVersion: 7
+  fileType: 0
+  gameObjectName: HotVoidTower
+  meshMode: 0
+  importMode: 1
+  importScale: {x: 1, y: 1, z: 1}
+  importOffset: {x: 0, y: 0, z: 0}
+  combineFaces: 1
+  ignoreCavity: 1
+  shareSameFace: 1
+  removeUnusedPalettes: 1
+  shareSameMaterial: 1
+  outputStructure: 0
+  generateLightmapUVs: 0
+  generateLightmapUVsAngleError: 8
+  generateLightmapUVsAreaError: 15
+  generateLightmapUVsHardAngle: 88
+  generateLightmapUVsPackMargin: 4
+  generateTangents: 0
+  generateVertexColors: 0
+  generateVertexColorMax: {r: 1, g: 1, b: 1, a: 1}
+  generateVertexColorMin: {r: 0.64, g: 0.64, b: 0.64, a: 1}
+  meshFaceVertexOffset: 0
+  loadFromVoxelFile: 1
+  generateMipMaps: 0
+  colliderType: 0
+  chunkPivotT: {x: 0.5, y: 0.5, z: 0.5}
+  createContactChunkFaces: 0
+  materialMode: 0
+  materials:
+  - {fileID: -156486658544998735, guid: e1fc59c0213830d4186587c534acf803, type: 3}
+  - {fileID: 5865586234719623449, guid: e1fc59c0213830d4186587c534acf803, type: 3}
+  - {fileID: 3473123015285894068, guid: e1fc59c0213830d4186587c534acf803, type: 3}
+  - {fileID: 8801679490653950251, guid: e1fc59c0213830d4186587c534acf803, type: 3}
+  materialNames:
+  - HotVoidTower_0
+  - HotVoidTower_1
+  - HotVoidTower_2
+  - HotVoidTower_3
+  remappedMaterials:
+  - name: HotVoidTower_0
+    material: {fileID: 2100000, guid: 0163c27f514014c43a993b5816108652, type: 2}
+  - name: HotVoidTower_1
+    material: {fileID: 2100000, guid: 8ea6456df70b83c41ace20ce9d9a108c, type: 2}
+  - name: HotVoidTower_2
+    material: {fileID: 2100000, guid: 65ddceb1704e3c14b98d12bbd3fe61d7, type: 2}
+  - name: HotVoidTower_3
+    material: {fileID: 2100000, guid: d672119be415b604bb4534d799e3b9e8, type: 2}
+  export: 0
+  legacyVoxImport: 0
+  legacyAssetNaming: 0
