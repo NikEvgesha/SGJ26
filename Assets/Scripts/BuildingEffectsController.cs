@@ -11,6 +11,9 @@ public sealed class BuildingEffectsController : MonoBehaviour
     private float _atmospherePerTick;
     private float _nextTickTime;
 
+    public float TemperaturePerTick => _temperaturePerTick;
+    public float AtmospherePerTick => _atmospherePerTick;
+
     private void Awake()
     {
         ResolveReferences();
@@ -39,6 +42,17 @@ public sealed class BuildingEffectsController : MonoBehaviour
     public void RegisterEffects(IReadOnlyList<BuildingEffect> effects)
     {
         AddEffects(effects, 1f);
+    }
+
+    public void RegisterTemporaryEffects(IReadOnlyList<BuildingEffect> effects, float durationSeconds)
+    {
+        if (effects == null || durationSeconds <= 0f)
+        {
+            return;
+        }
+
+        RegisterEffects(effects);
+        StartCoroutine(UnregisterEffectsAfterDelay(effects, durationSeconds));
     }
 
     public void UnregisterEffects(IReadOnlyList<BuildingEffect> effects)
@@ -86,6 +100,12 @@ public sealed class BuildingEffectsController : MonoBehaviour
                     break;
             }
         }
+    }
+
+    private System.Collections.IEnumerator UnregisterEffectsAfterDelay(IReadOnlyList<BuildingEffect> effects, float durationSeconds)
+    {
+        yield return new WaitForSeconds(durationSeconds);
+        UnregisterEffects(effects);
     }
 
     private void ResolveReferences()

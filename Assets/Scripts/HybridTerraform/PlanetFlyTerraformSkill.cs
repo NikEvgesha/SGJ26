@@ -98,6 +98,7 @@ namespace LittlePlanet.HybridTerraform
         private bool _savedOrbitZoomEnabled = true;
         private bool _orbitControlsCached;
         private float _nextButtonStateUpdateTime;
+        private string _lastStatusText;
         public bool IsFlightModeActive => _state == SkillState.Flying || _state == SkillState.Approaching;
         public float FlightDuration => flightDuration;
         public float CooldownDuration => cooldownDuration;
@@ -892,7 +893,7 @@ namespace LittlePlanet.HybridTerraform
                 return;
             }
 
-            statusText.text = _state switch
+            var nextText = _state switch
             {
                 SkillState.Aiming => "Select planet tile",
                 SkillState.Approaching => "Approaching",
@@ -900,6 +901,14 @@ namespace LittlePlanet.HybridTerraform
                 SkillState.Cooldown => $"{Mathf.CeilToInt(Mathf.Max(0f, _cooldownEndTime - Time.time))} s",
                 _ => string.Empty
             };
+
+            if (string.Equals(_lastStatusText, nextText, System.StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _lastStatusText = nextText;
+            statusText.text = nextText;
         }
 
         private static bool TryGetMoveInput(out Vector2 value)

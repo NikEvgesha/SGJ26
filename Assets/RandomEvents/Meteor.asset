@@ -1,0 +1,34 @@
+﻿%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b9a6cb5f03a4ab4aa46a6cb5a0d85f9, type: 3}
+  m_Name: Meteor
+  m_EditorClassIdentifier: 
+  eventName: "\u041C\u0435\u0442\u0435\u043E\u0440\u0438\u0442"
+  description: 
+  eventType: 0
+  effectDurationSeconds: 12
+  temporaryEffects:
+  - type: 0
+    value: 1
+  hasArea: 1
+  areaMustStartOnHighland: 0
+  areaRadius: 4
+  warningDurationSeconds: 8
+  warningColor: {r: 1, g: 0.05, b: 0.02, a: 0.78}
+  highlightSurfaceOffset: 0.06
+  destroyBuildingsInArea: 1
+  resetTerraformingInArea: 1
+  terraformingAfterImpact: 0
+  shakeCamera: 0
+  cameraShakeDurationSeconds: 1
+  cameraShakeStrength: 0.08
+  cameraShakeFrequency: 4

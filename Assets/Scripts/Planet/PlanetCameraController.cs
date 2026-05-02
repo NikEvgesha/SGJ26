@@ -34,6 +34,9 @@ namespace LittlePlanet.PlanetSystem
 
         private float _currentDistance;
         private Vector3 _cameraDirection;
+        private Coroutine _focusRoutine;
+        private Coroutine _shakeRoutine;
+        private Vector3 _shakeOffset;
 
         public bool ZoomEnabled { get; set; } = true;
 
@@ -144,8 +147,119 @@ namespace LittlePlanet.PlanetSystem
                 return;
             }
 
-            controlledCamera.transform.position = planetRoot.position + _cameraDirection * _currentDistance;
+            controlledCamera.transform.position = planetRoot.position + _cameraDirection * _currentDistance + _shakeOffset;
             controlledCamera.transform.LookAt(planetRoot.position);
+        }
+
+        public void FocusOnLocalDirection(Vector3 localDirection, float targetDistance, float durationSeconds)
+        {
+            if (!ResolveReferences() || localDirection.sqrMagnitude <= 0.000001f)
+            {
+                return;
+            }
+
+            RefreshCameraStateFromCurrentPosition();
+            if (_focusRoutine != null)
+            {
+                StopCoroutine(_focusRoutine);
+            }
+
+            _focusRoutine = StartCoroutine(FocusRoutine(localDirection.normalized, targetDistance, durationSeconds));
+        }
+
+        private System.Collections.IEnumerator FocusRoutine(Vector3 localDirection, float targetDistance, float durationSeconds)
+        {
+            var startRotation = planetRoot.rotation;
+            var startDistance = _currentDistance;
+            var desiredWorldDirection = _cameraDirection.sqrMagnitude > 0.000001f ? _cameraDirection.normalized : (controlledCamera.transform.position - planetRoot.position).normalized;
+            var currentWorldDirection = planetRoot.TransformDirection(localDirection);
+            var targetRotation = Quaternion.FromToRotation(currentWorldDirection, desiredWorldDirection) * planetRoot.rotation;
+            if (targetDistance > maxDistance)
+            {
+                maxDistance = targetDistance;
+            }
+
+            var clampedDistance = Mathf.Clamp(targetDistance, minDistance, maxDistance);
+            var duration = Mathf.Max(0.01f, durationSeconds);
+            var elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                var t = Mathf.Clamp01(elapsed / duration);
+                var easedT = t * t * (3f - 2f * t);
+                planetRoot.rotation = Quaternion.Slerp(startRotation, targetRotation, easedT);
+                _currentDistance = Mathf.Lerp(startDistance, clampedDistance, easedT);
+                ApplyCameraDistance();
+                yield return null;
+            }
+
+            planetRoot.rotation = targetRotation;
+            _currentDistance = clampedDistance;
+            ApplyCameraDistance();
+            _focusRoutine = null;
+        }
+
+        public void ShakeCamera(float durationSeconds, float strength)
+        {
+            ShakeCamera(durationSeconds, strength, 4f);
+        }
+
+        public void ShakeCamera(float durationSeconds, float strength, float frequency)
+        {
+            if (!ResolveReferences() || durationSeconds <= 0f || strength <= 0f)
+            {
+                return;
+            }
+
+            if (_shakeRoutine != null)
+            {
+                StopCoroutine(_shakeRoutine);
+            }
+
+            _shakeRoutine = StartCoroutine(ShakeRoutine(durationSeconds, strength, frequency));
+        }
+
+        private System.Collections.IEnumerator ShakeRoutine(float durationSeconds, float strength, float frequency)
+        {
+            var duration = Mathf.Max(0.01f, durationSeconds);
+            var safeFrequency = Mathf.Max(0.1f, frequency);
+            var seed = UnityEngine.Random.Range(0f, 1000f);
+            var elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                var fade = 1f - Mathf.Clamp01(elapsed / duration);
+                var time = elapsed * safeFrequency;
+                var x = Mathf.PerlinNoise(seed, time) * 2f - 1f;
+                var y = Mathf.PerlinNoise(seed + 13.7f, time) * 2f - 1f;
+                var z = Mathf.PerlinNoise(seed + 29.3f, time) * 2f - 1f;
+                _shakeOffset = new Vector3(x, y, z) * (strength * fade);
+                ApplyCameraDistance();
+                yield return null;
+            }
+
+            _shakeOffset = Vector3.zero;
+            ApplyCameraDistance();
+            _shakeRoutine = null;
+        }
+
+        private void RefreshCameraStateFromCurrentPosition()
+        {
+            if (controlledCamera == null || planetRoot == null)
+            {
+                return;
+            }
+
+            var offset = controlledCamera.transform.position - planetRoot.position;
+            if (offset.sqrMagnitude <= 0.000001f)
+            {
+                return;
+            }
+
+            _cameraDirection = offset.normalized;
+            _currentDistance = Mathf.Clamp(offset.magnitude, minDistance, maxDistance);
         }
 
         private bool TryGetScrollDelta(out float value)

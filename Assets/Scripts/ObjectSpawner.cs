@@ -27,6 +27,7 @@ namespace LittlePlanet.PlanetSystem
         [SerializeField, Min(0f)] private float maxVisibleDistanceToCamera = 36f;
         [SerializeField, Min(16)] private int updateBatchSize = 512;
         [SerializeField, Min(0.02f)] private float updateIntervalSeconds = 0.08f;
+        [SerializeField, Min(0.1f)] private float hiddenWaterCheckIntervalSeconds = 0.75f;
         [SerializeField, Range(0f, 1f)] private float growthUpdateThreshold = 0.01f;
         [SerializeField] private bool disableSpawnedColliders = true;
         [SerializeField] private bool enablePooling = true;
@@ -37,6 +38,7 @@ namespace LittlePlanet.PlanetSystem
         private bool _wereObjectsHidden;
         private int _updateCursor;
         private float _nextUpdateTime;
+        private float _nextHiddenWaterCheckTime;
 
         private sealed class SpawnEntry
         {
@@ -82,6 +84,7 @@ namespace LittlePlanet.PlanetSystem
             maxVisibleDistanceToCamera = Mathf.Max(0f, maxVisibleDistanceToCamera);
             updateBatchSize = Mathf.Max(16, updateBatchSize);
             updateIntervalSeconds = Mathf.Max(0.02f, updateIntervalSeconds);
+            hiddenWaterCheckIntervalSeconds = Mathf.Max(0.1f, hiddenWaterCheckIntervalSeconds);
             growthUpdateThreshold = Mathf.Clamp01(growthUpdateThreshold);
         }
 
@@ -204,11 +207,18 @@ namespace LittlePlanet.PlanetSystem
                     _wereObjectsHidden = true;
                 }
 
+                if (Time.time < _nextHiddenWaterCheckTime)
+                {
+                    return;
+                }
+
+                _nextHiddenWaterCheckTime = Time.time + hiddenWaterCheckIntervalSeconds;
                 ProcessEntryBatch(cameraToUse, evaluateVisibility: false);
                 return;
             }
 
             _wereObjectsHidden = false;
+            _nextHiddenWaterCheckTime = Time.time + hiddenWaterCheckIntervalSeconds;
             ProcessEntryBatch(cameraToUse, evaluateVisibility: true);
         }
 

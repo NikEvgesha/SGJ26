@@ -97,6 +97,11 @@ public class BuildPanel : MonoBehaviour
         SetOpen(!_isOpen);
     }
 
+    public void CancelBuildMode()
+    {
+        SetOpen(false);
+    }
+
     public void SelectBuilding(BuildingUISlot slot)
     {
         if (slot == null || slot.Building == null)
@@ -541,6 +546,38 @@ public class BuildPanel : MonoBehaviour
         }
 
         _placedBuildings.RemoveAt(index);
+    }
+
+    public int DestroyBuildingsOnTiles(IReadOnlyCollection<Tile> tiles)
+    {
+        if (tiles == null || tiles.Count == 0 || _placedBuildings.Count == 0)
+        {
+            return 0;
+        }
+
+        var tileIndices = new HashSet<int>();
+        foreach (var tile in tiles)
+        {
+            if (tile != null)
+            {
+                tileIndices.Add(tile.Index);
+            }
+        }
+
+        var destroyed = 0;
+        for (var i = _placedBuildings.Count - 1; i >= 0; i--)
+        {
+            var entry = _placedBuildings[i];
+            if (entry?.Tile == null || !tileIndices.Contains(entry.Tile.Index))
+            {
+                continue;
+            }
+
+            RemovePlacedBuildingAt(i, unregisterEffects: true);
+            destroyed++;
+        }
+
+        return destroyed;
     }
 
     private void EnsurePlacedBuildingsRoot()

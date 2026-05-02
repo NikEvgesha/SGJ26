@@ -65,7 +65,7 @@ public class BuildingUISlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
     {
         if (activeIndicator == null)
         {
-            var indicator = transform.Find("ActiveIndicator");
+            var indicator = FindChildRecursive(transform, "ActiveIndicator");
             if (indicator != null)
             {
                 activeIndicator = indicator.gameObject;
@@ -74,7 +74,7 @@ public class BuildingUISlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 
         if (iconImage == null)
         {
-            var icon = transform.Find("Panel/Icon") ?? transform.Find("Icon");
+            var icon = FindChildRecursive(transform, "Icon");
             if (icon != null)
             {
                 iconImage = icon.GetComponent<Image>();
@@ -82,8 +82,50 @@ public class BuildingUISlot : MonoBehaviour, IPointerEnterHandler, IPointerExitH
 
             if (iconImage == null)
             {
-                iconImage = GetComponentInChildren<Image>(true);
+                iconImage = FindFirstUsableIconImage();
             }
         }
+    }
+
+    private Image FindFirstUsableIconImage()
+    {
+        var images = GetComponentsInChildren<Image>(true);
+        for (var i = 0; i < images.Length; i++)
+        {
+            var image = images[i];
+            if (image == null || image.gameObject == activeIndicator)
+            {
+                continue;
+            }
+
+            return image;
+        }
+
+        return null;
+    }
+
+    private static Transform FindChildRecursive(Transform root, string childName)
+    {
+        if (root == null || string.IsNullOrWhiteSpace(childName))
+        {
+            return null;
+        }
+
+        for (var i = 0; i < root.childCount; i++)
+        {
+            var child = root.GetChild(i);
+            if (child.name == childName)
+            {
+                return child;
+            }
+
+            var nested = FindChildRecursive(child, childName);
+            if (nested != null)
+            {
+                return nested;
+            }
+        }
+
+        return null;
     }
 }

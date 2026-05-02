@@ -14,3 +14,12 @@ public enum UpgradeType
 
 }
 
+public enum EventType
+{
+    Meteor,
+    Volcano,
+    Earthshaking,
+    IceRain,
+    Sandstorm
+}
+

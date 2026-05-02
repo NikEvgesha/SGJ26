@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6b9a6cb5f03a4ab4aa46a6cb5a0d85f9, type: 3}
+  m_Name: Volcano
+  m_EditorClassIdentifier: 
+  eventName: "\u0412\u0443\u043B\u043A\u0430\u043D"
+  description: 
+  eventType: 1
+  effectDurationSeconds: 12
+  temporaryEffects:
+  - type: 0
+    value: 1
+  - type: 1
+    value: 1
+  hasArea: 1
+  areaMustStartOnHighland: 1
+  areaRadius: 12
+  warningDurationSeconds: 4
+  warningColor: {r: 1, g: 0.3071773, b: 0.019607842, a: 0.78}
+  highlightSurfaceOffset: 0.06
+  destroyBuildingsInArea: 1
+  resetTerraformingInArea: 1
+  terraformingAfterImpact: 0
+  shakeCamera: 1
+  cameraShakeDurationSeconds: 8.29
+  cameraShakeStrength: 0.78
+  cameraShakeFrequency: 4.75
