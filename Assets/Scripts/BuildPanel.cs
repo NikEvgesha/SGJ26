@@ -1,11 +1,12 @@
 using System.Collections.Generic;
+using LittlePlanet.UI;
 using LittlePlanet.PlanetSystem;
 using LittlePlanet.RuntimeInput;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
 
-public class BuildPanel : MonoBehaviour
+public class BuildPanel : MonoBehaviour, IManagedWindow
 {
     [Header("References")]
     [SerializeField] private Planet planet;
@@ -14,6 +15,7 @@ public class BuildPanel : MonoBehaviour
     [SerializeField] private Transform slotsRoot;
     [SerializeField] private BuildingInfoTooltip buildingInfo;
     [SerializeField] private CanvasGroup canvasGroup;
+    [SerializeField] private WindowManager windowManager;
     [SerializeField] private BuildingEffectsController buildingEffectsController;
     [SerializeField] private Camera interactionCamera;
     [SerializeField] private Transform placedBuildingsRoot;
@@ -47,6 +49,8 @@ public class BuildPanel : MonoBehaviour
     private int _lastSlotClickFrame = -1;
     private float _nextWaterDestroyCheckTime;
 
+    public bool IsWindowOpen => _isOpen;
+
     private sealed class PlacedBuildingEntry
     {
         public Building Building;
@@ -57,13 +61,14 @@ public class BuildPanel : MonoBehaviour
     {
         ResolveReferences();
         BuildSlots();
-        SetOpen(startOpen);
+        SetWindowOpen(startOpen);
     }
 
     private void OnEnable()
     {
         ResolveReferences();
         BindPlanetEvents();
+        windowManager?.Register(this);
         BindBuildButton();
     }
 
@@ -71,6 +76,7 @@ public class BuildPanel : MonoBehaviour
     {
         UnbindPlanetEvents();
         UnbindBuildButton();
+        windowManager?.Unregister(this);
         DeactivateBuildMode();
     }
 
@@ -94,12 +100,19 @@ public class BuildPanel : MonoBehaviour
 
     public void Toggle()
     {
-        SetOpen(!_isOpen);
+        ResolveReferences();
+        if (windowManager != null)
+        {
+            windowManager.ToggleExclusive(this);
+            return;
+        }
+
+        SetWindowOpen(!_isOpen);
     }
 
     public void CancelBuildMode()
     {
-        SetOpen(false);
+        SetWindowOpen(false);
     }
 
     public void SelectBuilding(BuildingUISlot slot)
@@ -141,7 +154,7 @@ public class BuildPanel : MonoBehaviour
         }
     }
 
-    private void SetOpen(bool isOpen)
+    public void SetWindowOpen(bool isOpen)
     {
         _isOpen = isOpen;
         EnsureCanvasGroup();
@@ -409,6 +422,11 @@ public class BuildPanel : MonoBehaviour
         }
 
         EnsureCanvasGroup();
+        if (windowManager == null)
+        {
+            windowManager = WindowManager.Instance;
+        }
+
         if (interactionCamera == null)
         {
             interactionCamera = Camera.main;

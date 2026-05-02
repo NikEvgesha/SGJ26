@@ -1,10 +1,11 @@
 ﻿using System.Collections.Generic;
 using LittlePlanet.HybridTerraform;
 using LittlePlanet.PlanetSystem;
+using LittlePlanet.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class UpgradePanel : MonoBehaviour
+public class UpgradePanel : MonoBehaviour, IManagedWindow
 {
     [Header("References")]
     [SerializeField] private Button upgradeButton;
@@ -12,6 +13,7 @@ public class UpgradePanel : MonoBehaviour
     [SerializeField] private Transform slotsRoot;
     [SerializeField] private string slotsRootObjectName = "UpgradesRoot";
     [SerializeField] private CanvasGroup canvasGroup;
+    [SerializeField] private WindowManager windowManager;
     [SerializeField] private Planet planet;
     [SerializeField] private PlanetFlyTerraformSkill flySkill;
 
@@ -23,17 +25,20 @@ public class UpgradePanel : MonoBehaviour
     private readonly Dictionary<UpgradeDefinition, int> _levels = new();
     private bool _isOpen;
 
+    public bool IsWindowOpen => _isOpen;
+
     private void Awake()
     {
         ResolveReferences();
         BuildSlots();
-        SetOpen(startOpen);
+        SetWindowOpen(startOpen);
     }
 
     private void OnEnable()
     {
         ResolveReferences();
         BindUpgradeButton();
+        windowManager?.Register(this);
         BindCurrencyEvents();
         RefreshSlots();
     }
@@ -42,14 +47,22 @@ public class UpgradePanel : MonoBehaviour
     {
         UnbindCurrencyEvents();
         UnbindUpgradeButton();
+        windowManager?.Unregister(this);
     }
 
     public void Toggle()
     {
-        SetOpen(!_isOpen);
+        ResolveReferences();
+        if (windowManager != null)
+        {
+            windowManager.ToggleExclusive(this);
+            return;
+        }
+
+        SetWindowOpen(!_isOpen);
     }
 
-    private void SetOpen(bool isOpen)
+    public void SetWindowOpen(bool isOpen)
     {
         _isOpen = isOpen;
         EnsureCanvasGroup();
@@ -129,6 +142,11 @@ public class UpgradePanel : MonoBehaviour
         }
 
         EnsureCanvasGroup();
+        if (windowManager == null)
+        {
+            windowManager = WindowManager.Instance;
+        }
+
         if (planet == null)
         {
             planet = FindFirstObjectByType<Planet>();

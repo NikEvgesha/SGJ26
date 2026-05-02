@@ -1,4 +1,5 @@
 using LittlePlanet.PlanetSystem;
+using LittlePlanet.UI;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -39,6 +40,7 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField] private Material runtimeShipMaterial;
         [SerializeField] private Button activateButton;
         [SerializeField] private TMP_Text statusText;
+        [SerializeField] private WindowManager windowManager;
 
         [Header("Skill")]
         [SerializeField, Min(5f)] private float flightDuration = 5f;
@@ -190,6 +192,8 @@ namespace LittlePlanet.HybridTerraform
                 return;
             }
 
+            ResolveReferences();
+            windowManager?.CloseAll();
             _state = SkillState.Aiming;
             CacheOrbitControls();
             SetOrbitZoomEnabled(false);
@@ -708,6 +712,11 @@ namespace LittlePlanet.HybridTerraform
             if (orbitCameraController == null)
             {
                 orbitCameraController = FindFirstObjectByType<PlanetCameraController>();
+            }
+
+            if (windowManager == null)
+            {
+                windowManager = WindowManager.Instance;
             }
 
             ResolvePlanetSurfaceCollider();
