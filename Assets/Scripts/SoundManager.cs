@@ -1,11 +1,6 @@
 using UnityEngine;
 using LittlePlanet.HybridTerraform;
-#if UNITY_EDITOR
-using UnityEditor;
-using UnityEditor.SceneManagement;
-#endif
 
-[ExecuteAlways]
 public class SoundManager : MonoBehaviour
 {
     [Header("Clips")]
@@ -23,13 +18,10 @@ public class SoundManager : MonoBehaviour
     [Header("Volume")]
     [SerializeField, Range(0f, 1f)] private float musicVolume = 0.6f;
     [SerializeField, Range(0f, 1f)] private float shipNoiseVolume = 0.75f;
-    [SerializeField] private bool logAudioWarnings = true;
+    [SerializeField] private bool logAudioWarnings;
 
     private bool _isShipNoiseActive;
     private float _nextFlightStateCheckTime;
-#if UNITY_EDITOR
-    private bool _editorSetupQueued;
-#endif
 
     private void Awake()
     {
@@ -37,34 +29,14 @@ public class SoundManager : MonoBehaviour
         ConfigureSources();
     }
 
-    private void OnEnable()
-    {
-#if UNITY_EDITOR
-        if (!Application.isPlaying)
-        {
-            QueueEditorSetup();
-        }
-#endif
-    }
-
     private void Start()
     {
-        if (!Application.isPlaying)
-        {
-            return;
-        }
-
         PlayMusic();
         UpdateShipNoiseState(force: true);
     }
 
     private void Update()
     {
-        if (!Application.isPlaying)
-        {
-            return;
-        }
-
         if (Time.unscaledTime < _nextFlightStateCheckTime)
         {
             return;
@@ -77,9 +49,6 @@ public class SoundManager : MonoBehaviour
     private void OnValidate()
     {
         flightStateCheckInterval = Mathf.Max(0.05f, flightStateCheckInterval);
-#if UNITY_EDITOR
-        QueueEditorSetup();
-#endif
     }
 
     [ContextMenu("Setup Sound Sources")]
@@ -219,58 +188,4 @@ public class SoundManager : MonoBehaviour
             Debug.LogWarning($"[SoundManager] {message}", this);
         }
     }
-
-#if UNITY_EDITOR
-    private void QueueEditorSetup()
-    {
-        if (_editorSetupQueued || Application.isPlaying)
-        {
-            return;
-        }
-
-        _editorSetupQueued = true;
-        EditorApplication.delayCall += SetupSoundSourcesInEditor;
-    }
-
-    private void SetupSoundSourcesInEditor()
-    {
-        _editorSetupQueued = false;
-        if (this == null || Application.isPlaying)
-        {
-            return;
-        }
-
-        AutoAssignClipsInEditor();
-        ResolveReferences(createMissingSources: true);
-        ConfigureSources();
-        EditorUtility.SetDirty(this);
-        if (musicSource != null)
-        {
-            EditorUtility.SetDirty(musicSource);
-        }
-
-        if (shipNoiseSource != null)
-        {
-            EditorUtility.SetDirty(shipNoiseSource);
-        }
-
-        if (gameObject.scene.IsValid())
-        {
-            EditorSceneManager.MarkSceneDirty(gameObject.scene);
-        }
-    }
-
-    private void AutoAssignClipsInEditor()
-    {
-        if (musicClip == null)
-        {
-            musicClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Sounds/music_full.wav");
-        }
-
-        if (shipNoiseClip == null)
-        {
-            shipNoiseClip = AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Sounds/spaceship_noise.wav");
-        }
-    }
-#endif
 }

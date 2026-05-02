@@ -2297,7 +2297,7 @@ MonoBehaviour:
   flightStateCheckInterval: 0.1
   musicVolume: 0.6
   shipNoiseVolume: 0.75
-  logAudioWarnings: 1
+  logAudioWarnings: 0
 --- !u!4 &553714317
 Transform:
   m_ObjectHideFlags: 0
