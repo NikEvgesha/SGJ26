@@ -87,7 +87,7 @@ public sealed class RandomEventsManager : MonoBehaviour
         StopEvents();
         ClearAreaHighlight();
         StopPulse();
-        HideCaution();
+        HideCautionWithoutLookup();
     }
 
     private void OnDestroy()
@@ -381,6 +381,11 @@ public sealed class RandomEventsManager : MonoBehaviour
     private void HideCaution()
     {
         EnsureCautionReferences();
+        HideCautionWithoutLookup();
+    }
+
+    private void HideCautionWithoutLookup()
+    {
         if (eventCaution != null)
         {
             eventCaution.alpha = 0f;

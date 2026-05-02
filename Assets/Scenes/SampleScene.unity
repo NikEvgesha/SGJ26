@@ -1033,7 +1033,7 @@ MonoBehaviour:
   interactionCamera: {fileID: 330585545}
   placedBuildingsRoot: {fileID: 0}
   buildings:
-  - {fileID: 5394203575398494096, guid: 0f5c975dd6db5a0468e921d60d63995a, type: 3}
+  - {fileID: 5394203575398494096, guid: 7bc104dd5a385e340bed405d70bf4408, type: 3}
   - {fileID: 5394203575398494096, guid: cf33e064ebd5f8d4ca0dd2b18839d869, type: 3}
   - {fileID: 5394203575398494096, guid: a1b2f0b1374a7db4993ccd636281e121, type: 3}
   - {fileID: 5394203575398494096, guid: 47e587f2e44983c4299440cd2e3d1ca3, type: 3}
