@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6b9a6cb5f03a4ab4aa46a6cb5a0d85f9, type: 3}
   m_Name: Volcano
   m_EditorClassIdentifier: 
-  eventName: "\u0412\u0443\u043B\u043A\u0430\u043D"
+  eventName: "\u0418\u0437\u0432\u0435\u0440\u0436\u0435\u043D\u0438\u0435 \u0432\u0443\u043B\u043A\u0430\u043D\u0430"
   description: 
   eventType: 1
   effectDurationSeconds: 12

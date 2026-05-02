@@ -67,7 +67,7 @@ PrefabInstance:
     - target: {fileID: 8539106417984442782, guid: 1cae3b9799a49ba4687e64c1a5175fca, type: 3}
       propertyPath: icon
       value: 
-      objectReference: {fileID: 21300000, guid: 0c378cbde6ff0834495007d1f12fb926, type: 3}
+      objectReference: {fileID: 21300000, guid: 5f32f586a8b87a34aa2ec508dc2758cd, type: 3}
     - target: {fileID: 8539106417984442782, guid: 1cae3b9799a49ba4687e64c1a5175fca, type: 3}
       propertyPath: effects.Array.size
       value: 1

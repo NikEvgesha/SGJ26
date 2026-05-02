@@ -625,7 +625,7 @@ public sealed class RandomEventsManager : MonoBehaviour
 
         if (eventNameText == null)
         {
-            eventNameText = FindText(eventCaution.transform, "Title") ?? eventCaution.GetComponentInChildren<TMP_Text>(true);
+            eventNameText = FindText(eventCaution.transform, "name") ?? eventCaution.GetComponentInChildren<TMP_Text>(true);
         }
 
         if (goToAreaButton == null)
