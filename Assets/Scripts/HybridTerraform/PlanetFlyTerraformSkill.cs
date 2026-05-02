@@ -349,7 +349,8 @@ namespace LittlePlanet.HybridTerraform
             var surfacePosition = TryGetPlanetSurfacePoint(normal, out var raycastSurfacePosition)
                 ? raycastSurfacePosition
                 : fallbackSurfacePosition;
-            return surfacePosition + normal * hoverAltitude;
+            var surfaceRadius = GetFlightSurfaceRadius(surfacePosition);
+            return planet.transform.position + normal * (surfaceRadius + hoverAltitude);
         }
 
         private void RotateCameraOrbitIfRequested()
@@ -436,6 +437,7 @@ namespace LittlePlanet.HybridTerraform
             }
 
             var surfaceRadius = Vector3.Distance(surfacePosition, center);
+            surfaceRadius = Mathf.Max(surfaceRadius, GetCurrentWaterRadius());
             var currentRadius = Vector3.Distance(shipRoot.position, center);
             if (currentRadius > surfaceRadius + magnetRange || IsEscapePressed())
             {
@@ -446,6 +448,22 @@ namespace LittlePlanet.HybridTerraform
             var targetPosition = center + normal * (surfaceRadius + hoverAltitude);
             shipRoot.position = Vector3.Lerp(shipRoot.position, targetPosition, GetFrameLerp(surfaceFollowSpeed));
             AlignShipRotation(normal);
+        }
+
+        private float GetFlightSurfaceRadius(Vector3 surfacePosition)
+        {
+            if (planet == null)
+            {
+                return 0f;
+            }
+
+            var terrainRadius = Vector3.Distance(surfacePosition, planet.transform.position);
+            return Mathf.Max(terrainRadius, GetCurrentWaterRadius());
+        }
+
+        private float GetCurrentWaterRadius()
+        {
+            return planet != null ? Mathf.Max(0f, planet.CurrentWaterRadius) : 0f;
         }
 
         private void TerraformNearShip()

@@ -1,7 +1,6 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using LittlePlanet.HybridTerraform;
 using LittlePlanet.PlanetSystem;
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -15,12 +14,6 @@ public class UpgradePanel : MonoBehaviour
     [SerializeField] private CanvasGroup canvasGroup;
     [SerializeField] private Planet planet;
     [SerializeField] private PlanetFlyTerraformSkill flySkill;
-    [SerializeField] private Button buyButton;
-    [SerializeField] private TMP_Text priceText;
-    [SerializeField] private TMP_Text nameText;
-    [SerializeField] private TMP_Text descriptionText;
-    [SerializeField] private TMP_Text currentValueText;
-    [SerializeField] private TMP_Text newValueText;
 
     [Header("Upgrades")]
     [SerializeField] private List<UpgradeDefinition> upgrades = new();
@@ -28,8 +21,6 @@ public class UpgradePanel : MonoBehaviour
 
     private readonly List<UpgradeSlotUI> _slots = new();
     private readonly Dictionary<UpgradeDefinition, int> _levels = new();
-    private UpgradeSlotUI _selectedSlot;
-    private UpgradeDefinition _selectedUpgrade;
     private bool _isOpen;
 
     private void Awake()
@@ -43,15 +34,13 @@ public class UpgradePanel : MonoBehaviour
     {
         ResolveReferences();
         BindUpgradeButton();
-        BindBuyButton();
         BindCurrencyEvents();
-        RefreshInfo();
+        RefreshSlots();
     }
 
     private void OnDisable()
     {
         UnbindCurrencyEvents();
-        UnbindBuyButton();
         UnbindUpgradeButton();
     }
 
@@ -97,48 +86,38 @@ public class UpgradePanel : MonoBehaviour
             }
 
             var slot = Instantiate(slotPrefab, slotsRoot);
-            var level = GetLevel(upgrade);
-            slot.Initialize(this, upgrade, level);
+            slot.Initialize(this, upgrade, GetLevel(upgrade));
             _slots.Add(slot);
         }
+
+        RefreshSlots();
     }
 
-    public void SelectUpgrade(UpgradeSlotUI slot)
+    public void BuyUpgrade(UpgradeSlotUI slot)
     {
-        if (slot == null || slot.Upgrade == null)
+        if (slot == null || slot.Upgrade == null || planet == null || flySkill == null)
         {
             return;
         }
 
-        _selectedSlot = slot;
-        _selectedUpgrade = slot.Upgrade;
-        RefreshInfo();
-    }
-
-    private void BuySelectedUpgrade()
-    {
-        if (_selectedUpgrade == null || planet == null || flySkill == null)
+        var upgrade = slot.Upgrade;
+        var currentLevel = GetLevel(upgrade);
+        if (currentLevel >= upgrade.MaxLevel)
         {
+            RefreshSlots();
             return;
         }
 
-        var currentLevel = GetLevel(_selectedUpgrade);
-        if (currentLevel >= _selectedUpgrade.MaxLevel)
-        {
-            RefreshInfo();
-            return;
-        }
-
-        var price = _selectedUpgrade.GetCostForLevel(currentLevel);
+        var price = upgrade.GetCostForLevel(currentLevel);
         if (!planet.Currency.TrySpend(price))
         {
-            RefreshInfo();
+            RefreshSlots();
             return;
         }
 
-        flySkill.AddUpgradeValue(_selectedUpgrade.UpgradeType, _selectedUpgrade.ValuePerLevel);
-        SetLevel(_selectedUpgrade, currentLevel + 1);
-        RefreshInfo();
+        flySkill.AddUpgradeValue(upgrade.UpgradeType, upgrade.ValuePerLevel);
+        SetLevel(upgrade, currentLevel + 1);
+        RefreshSlots();
     }
 
     private void ResolveReferences()
@@ -168,37 +147,6 @@ public class UpgradePanel : MonoBehaviour
                 upgradeButton = buttonObject.GetComponent<Button>();
             }
         }
-
-        var infoRoot = FindChildByName(transform, "Info");
-        if (nameText == null)
-        {
-            nameText = FindText(infoRoot, "name");
-        }
-
-        if (descriptionText == null)
-        {
-            descriptionText = FindText(infoRoot, "Description");
-        }
-
-        if (currentValueText == null)
-        {
-            currentValueText = FindText(infoRoot, "CurrentValue");
-        }
-
-        if (newValueText == null)
-        {
-            newValueText = FindText(infoRoot, "NewValue");
-        }
-
-        if (buyButton == null)
-        {
-            buyButton = FindSelectable<Button>(infoRoot, "Button");
-        }
-
-        if (priceText == null)
-        {
-            priceText = FindText(buyButton != null ? buyButton.transform : infoRoot, "price");
-        }
     }
 
     private void EnsureCanvasGroup()
@@ -225,22 +173,11 @@ public class UpgradePanel : MonoBehaviour
         upgradeButton.onClick.AddListener(Toggle);
     }
 
-    private void BindBuyButton()
+    private void UnbindUpgradeButton()
     {
-        if (buyButton == null)
+        if (upgradeButton != null)
         {
-            return;
-        }
-
-        buyButton.onClick.RemoveListener(BuySelectedUpgrade);
-        buyButton.onClick.AddListener(BuySelectedUpgrade);
-    }
-
-    private void UnbindBuyButton()
-    {
-        if (buyButton != null)
-        {
-            buyButton.onClick.RemoveListener(BuySelectedUpgrade);
+            upgradeButton.onClick.RemoveListener(Toggle);
         }
     }
 
@@ -263,7 +200,7 @@ public class UpgradePanel : MonoBehaviour
 
     private void HandleCurrencyChanged(int amount)
     {
-        RefreshInfo();
+        RefreshSlots();
     }
 
     private int GetLevel(UpgradeDefinition upgrade)
@@ -278,83 +215,40 @@ public class UpgradePanel : MonoBehaviour
             return;
         }
 
-        var clamped = Mathf.Clamp(level, 0, upgrade.MaxLevel);
-        _levels[upgrade] = clamped;
+        _levels[upgrade] = Mathf.Clamp(level, 0, upgrade.MaxLevel);
+    }
 
+    private void RefreshSlots()
+    {
+        ResolveReferences();
         for (var i = 0; i < _slots.Count; i++)
         {
-            if (_slots[i] != null && _slots[i].Upgrade == upgrade)
-            {
-                _slots[i].SetLevel(clamped);
-            }
+            RefreshSlot(_slots[i]);
         }
     }
 
-    private void RefreshInfo()
+    private void RefreshSlot(UpgradeSlotUI slot)
     {
-        var hasUpgrade = _selectedUpgrade != null;
-        if (nameText != null)
+        if (slot == null || slot.Upgrade == null)
         {
-            nameText.text = hasUpgrade ? _selectedUpgrade.UpgradeName : string.Empty;
-        }
-
-        if (descriptionText != null)
-        {
-            descriptionText.text = hasUpgrade ? _selectedUpgrade.Description : string.Empty;
-        }
-
-        if (!hasUpgrade || flySkill == null)
-        {
-            if (currentValueText != null)
-            {
-                currentValueText.text = string.Empty;
-            }
-
-            if (newValueText != null)
-            {
-                newValueText.text = string.Empty;
-            }
-
-            if (priceText != null)
-            {
-                priceText.text = string.Empty;
-            }
-
-            if (buyButton != null)
-            {
-                buyButton.interactable = false;
-            }
-
             return;
         }
 
-        var level = GetLevel(_selectedUpgrade);
-        var currentValue = flySkill.GetUpgradeValue(_selectedUpgrade.UpgradeType);
-        var isMaxLevel = level >= _selectedUpgrade.MaxLevel;
-        var nextValue = isMaxLevel ? currentValue : GetNextValue(_selectedUpgrade, currentValue);
-        var price = _selectedUpgrade.GetCostForLevel(level);
+        var upgrade = slot.Upgrade;
+        var level = GetLevel(upgrade);
+        var isMaxLevel = level >= upgrade.MaxLevel;
+        var price = upgrade.GetCostForLevel(level);
+        var currentValue = flySkill != null ? flySkill.GetUpgradeValue(upgrade.UpgradeType) : 0f;
+        var nextValue = isMaxLevel ? currentValue : GetNextValue(upgrade, currentValue);
+        var canBuy = !isMaxLevel && planet != null && flySkill != null && planet.Currency.Amount >= price;
 
-        if (currentValueText != null)
-        {
-            currentValueText.text = $"Current: {FormatValue(currentValue, _selectedUpgrade.UpgradeType)}";
-        }
-
-        if (newValueText != null)
-        {
-            newValueText.text = isMaxLevel
-                ? "New: Max level"
-                : $"New: {FormatValue(nextValue, _selectedUpgrade.UpgradeType)}";
-        }
-
-        if (priceText != null)
-        {
-            priceText.text = isMaxLevel ? "MAX" : price.ToString();
-        }
-
-        if (buyButton != null)
-        {
-            buyButton.interactable = !isMaxLevel && planet != null && planet.Currency.Amount >= price;
-        }
+        slot.SetState(
+            level,
+            price,
+            FormatValue(currentValue, upgrade.UpgradeType),
+            FormatValue(nextValue, upgrade.UpgradeType),
+            canBuy,
+            isMaxLevel);
     }
 
     private static float GetNextValue(UpgradeDefinition upgrade, float currentValue)
@@ -379,14 +273,6 @@ public class UpgradePanel : MonoBehaviour
             : value.ToString("0.##");
     }
 
-    private void UnbindUpgradeButton()
-    {
-        if (upgradeButton != null)
-        {
-            upgradeButton.onClick.RemoveListener(Toggle);
-        }
-    }
-
     private static Transform FindChildByName(Transform root, string childName)
     {
         if (root == null || string.IsNullOrWhiteSpace(childName))
@@ -405,17 +291,5 @@ public class UpgradePanel : MonoBehaviour
         }
 
         return null;
-    }
-
-    private static TMP_Text FindText(Transform root, string childName)
-    {
-        var child = FindChildByName(root, childName);
-        return child != null ? child.GetComponent<TMP_Text>() : null;
-    }
-
-    private static T FindSelectable<T>(Transform root, string childName) where T : Selectable
-    {
-        var child = FindChildByName(root, childName);
-        return child != null ? child.GetComponent<T>() : null;
     }
 }

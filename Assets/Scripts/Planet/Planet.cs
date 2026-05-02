@@ -249,6 +249,7 @@ namespace LittlePlanet.PlanetSystem
         public event Action<Tile> TileClicked;
         public event Action PlanetGenerated;
         public float Radius => radius;
+        public float CurrentWaterRadius => manageWater ? _currentWaterRadius : 0f;
         public CurrencyWallet Currency => _currencyWallet;
         public bool ClickTintEnabled { get; set; } = true;
         public bool IsConditionsInGreenZone => GetConditionsDistance01() <= greenConditionRadius;
