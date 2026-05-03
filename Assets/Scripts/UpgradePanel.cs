@@ -171,6 +171,11 @@ public class UpgradePanel : MonoBehaviour, IManagedWindow
     public void SetHotkeyEnabled(bool isEnabled)
     {
         enableHotkey = isEnabled;
+        if (isEnabled)
+        {
+            ResolveReferences();
+            BindButtons();
+        }
     }
 
     public void SetTutorialAllowedUpgrade(UpgradeType? allowedType)
@@ -244,11 +249,7 @@ public class UpgradePanel : MonoBehaviour, IManagedWindow
 
         if (upgradeButton == null)
         {
-            var buttonObject = GameObject.Find("Upgrade");
-            if (buttonObject != null)
-            {
-                upgradeButton = buttonObject.GetComponent<Button>();
-            }
+            upgradeButton = FindSceneButtonByName("Upgrade");
         }
 
         if (closeButton == null)
@@ -451,6 +452,31 @@ public class UpgradePanel : MonoBehaviour, IManagedWindow
             if (child != null && string.Equals(child.name, childName, System.StringComparison.Ordinal))
             {
                 return child;
+            }
+        }
+
+        return null;
+    }
+
+    private static Button FindSceneButtonByName(string buttonName)
+    {
+        if (string.IsNullOrWhiteSpace(buttonName))
+        {
+            return null;
+        }
+
+        var buttons = Resources.FindObjectsOfTypeAll<Button>();
+        for (var i = 0; i < buttons.Length; i++)
+        {
+            var button = buttons[i];
+            if (button == null || !button.gameObject.scene.IsValid())
+            {
+                continue;
+            }
+
+            if (string.Equals(button.gameObject.name, buttonName, StringComparison.Ordinal))
+            {
+                return button;
             }
         }
 

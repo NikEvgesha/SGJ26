@@ -287,7 +287,7 @@ public sealed class TutorialManager : MonoBehaviour
 
         if (uiCanvas == null)
         {
-            var uiRoot = GameObject.Find(uiRootObjectName);
+            var uiRoot = FindSceneObjectByName(uiRootObjectName);
             if (uiRoot != null)
             {
                 uiCanvas = uiRoot.GetComponent<Canvas>();
@@ -296,22 +296,17 @@ public sealed class TutorialManager : MonoBehaviour
             uiCanvas ??= FindFirstObjectByType<Canvas>(FindObjectsInactive.Include);
         }
 
-        _uiRoot = string.IsNullOrWhiteSpace(uiRootObjectName)
-            ? null
-            : GameObject.Find(uiRootObjectName);
-        _currencyRoot = string.IsNullOrWhiteSpace(currencyObjectName)
-            ? null
-            : GameObject.Find(currencyObjectName);
-        _upgradeButtonRoot = string.IsNullOrWhiteSpace(upgradeButtonObjectName)
-            ? null
-            : GameObject.Find(upgradeButtonObjectName);
-        _buildButtonRoot = string.IsNullOrWhiteSpace(buildButtonObjectName)
-            ? null
-            : GameObject.Find(buildButtonObjectName);
-        _terraformingIndexRoot = string.IsNullOrWhiteSpace(terraformingIndexObjectName)
-            ? null
-            : GameObject.Find(terraformingIndexObjectName);
+        ResolveUiObjectReferences();
         _flyActivateButton = flySkill != null ? flySkill.ActivateButton : null;
+    }
+
+    private void ResolveUiObjectReferences()
+    {
+        _uiRoot ??= FindSceneObjectByName(uiRootObjectName);
+        _currencyRoot ??= FindSceneObjectByName(currencyObjectName);
+        _upgradeButtonRoot ??= FindSceneObjectByName(upgradeButtonObjectName);
+        _buildButtonRoot ??= FindSceneObjectByName(buildButtonObjectName);
+        _terraformingIndexRoot ??= FindSceneObjectByName(terraformingIndexObjectName);
     }
 
     private void EnsureTutorialUi()
@@ -561,6 +556,8 @@ public sealed class TutorialManager : MonoBehaviour
 
     private void SetMainUiVisibility(bool showCurrency, bool showUpgradeButton, bool showBuildButton, bool showTerraforming)
     {
+        ResolveUiObjectReferences();
+
         SetUiRootVisible(_currencyRoot, showCurrency);
         SetUiRootVisible(_upgradeButtonRoot, showUpgradeButton);
         SetUiRootVisible(_buildButtonRoot, showBuildButton);
@@ -590,6 +587,31 @@ public sealed class TutorialManager : MonoBehaviour
         }
 
         target.SetActive(isVisible);
+    }
+
+    private static GameObject FindSceneObjectByName(string objectName)
+    {
+        if (string.IsNullOrWhiteSpace(objectName))
+        {
+            return null;
+        }
+
+        var objects = Resources.FindObjectsOfTypeAll<GameObject>();
+        for (var i = 0; i < objects.Length; i++)
+        {
+            var target = objects[i];
+            if (target == null || !target.scene.IsValid())
+            {
+                continue;
+            }
+
+            if (string.Equals(target.name, objectName, StringComparison.Ordinal))
+            {
+                return target;
+            }
+        }
+
+        return null;
     }
 
     private void HandleSkillActivated()
@@ -717,10 +739,6 @@ public sealed class TutorialManager : MonoBehaviour
                 }
                 break;
             case TutorialStep.CloseUpgradeAndCollectHundred:
-                if (upgradePanel != null && upgradePanel.IsWindowOpen)
-                {
-                    SetPrimaryArrowToUi(upgradePanel.GetCloseButtonRect(), new Vector2(0f, 55f));
-                }
                 break;
             case TutorialStep.OpenBuildAndSelectAirGenerator:
                 if (buildPanel != null && buildPanel.IsWindowOpen)

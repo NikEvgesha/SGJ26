@@ -173,6 +173,11 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
     {
         enableOpenHotkey = openHotkeyEnabled;
         enableNumberHotkeys = numberHotkeysEnabled;
+        if (openHotkeyEnabled)
+        {
+            ResolveReferences();
+            BindBuildButton();
+        }
     }
 
     public void SetTutorialAllowedBuildingIndex(int allowedIndex)
@@ -786,11 +791,7 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
     {
         if (buildButton == null)
         {
-            var buttonObject = GameObject.Find("BuildButton");
-            if (buttonObject != null)
-            {
-                buildButton = buttonObject.GetComponent<Button>();
-            }
+            buildButton = FindSceneButtonByName("BuildButton");
         }
 
         if (buildButton == null)
@@ -808,5 +809,30 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
         {
             buildButton.onClick.RemoveListener(Toggle);
         }
+    }
+
+    private static Button FindSceneButtonByName(string buttonName)
+    {
+        if (string.IsNullOrWhiteSpace(buttonName))
+        {
+            return null;
+        }
+
+        var buttons = Resources.FindObjectsOfTypeAll<Button>();
+        for (var i = 0; i < buttons.Length; i++)
+        {
+            var button = buttons[i];
+            if (button == null || !button.gameObject.scene.IsValid())
+            {
+                continue;
+            }
+
+            if (string.Equals(button.gameObject.name, buttonName, StringComparison.Ordinal))
+            {
+                return button;
+            }
+        }
+
+        return null;
     }
 }
