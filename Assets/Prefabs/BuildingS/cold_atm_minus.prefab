@@ -147,6 +147,15 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 21300000, guid: 9b4fc0c65f21c6a41bd4e5d89a502218, type: 3}
     - target: {fileID: 8539106417984442782, guid: 1cae3b9799a49ba4687e64c1a5175fca, type: 3}
+      propertyPath: description
+      value: "\u041F\u043E\u043D\u0438\u0436\u0430\u0435\u0442 \u0442\u0435\u043C\u043F\u0435\u0440\u0430\u0442\u0443\u0440\u0443\n\u041F\u043E\u043D\u0438\u0436\u0430\u0435\u0442
+        \u0430\u0442\u043C\u043E\u0441\u0444\u0435\u0440\u0443"
+      objectReference: {fileID: 0}
+    - target: {fileID: 8539106417984442782, guid: 1cae3b9799a49ba4687e64c1a5175fca, type: 3}
+      propertyPath: buildingName
+      value: "\u0425\u043E\u043B\u043E\u0434\u0438\u043B\u044C\u043D\u0438\u043A"
+      objectReference: {fileID: 0}
+    - target: {fileID: 8539106417984442782, guid: 1cae3b9799a49ba4687e64c1a5175fca, type: 3}
       propertyPath: effects.Array.size
       value: 2
       objectReference: {fileID: 0}
