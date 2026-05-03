@@ -27,9 +27,8 @@ namespace LittlePlanet.Balance
             EnsureTextureAssigned();
         }
 
-        protected override void OnValidate()
+        private void OnValidate()
         {
-            base.OnValidate();
             EnsureTextureAssigned();
         }
 
