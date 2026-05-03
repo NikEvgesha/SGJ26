@@ -25,12 +25,13 @@ public sealed class RandomEventsManager : MonoBehaviour
     [SerializeField] private BuildingEffectsController buildingEffectsController;
     [SerializeField] private CanvasGroup eventCaution;
     [SerializeField] private TMP_Text eventNameText;
+    [SerializeField] private TMP_Text eventTimerText;
     [SerializeField] private Button goToAreaButton;
     [SerializeField] private GameObject effectsRoot;
-    [SerializeField] private GameObject temperatureEffectObject;
-    [SerializeField] private TMP_Text temperatureEffectSignText;
-    [SerializeField] private GameObject atmosphereEffectObject;
-    [SerializeField] private TMP_Text atmosphereEffectSignText;
+    [SerializeField] private GameObject temperaturePlusEffectObject;
+    [SerializeField] private GameObject temperatureMinusEffectObject;
+    [SerializeField] private GameObject atmospherePlusEffectObject;
+    [SerializeField] private GameObject atmosphereMinusEffectObject;
     [SerializeField] private GameObject demolishEffectObject;
     [SerializeField] private Material areaHighlightMaterial;
 
@@ -59,6 +60,10 @@ public sealed class RandomEventsManager : MonoBehaviour
     [SerializeField, Min(0.01f)] private float meteorImpactEffectEndScale = 3.5f;
     [SerializeField] private Color meteorImpactEffectColor = new(1f, 0.35f, 0.05f, 0.75f);
 
+    [Header("Volcano Visual")]
+    [SerializeField] private GameObject volcanoPrefab;
+    [SerializeField, Min(0f)] private float volcanoSurfaceOffset = 0.1f;
+
     private readonly List<Tile> _activeAreaTiles = new();
     private Coroutine _eventRoutine;
     private Coroutine _pulseRoutine;
@@ -70,6 +75,7 @@ public sealed class RandomEventsManager : MonoBehaviour
     private RectTransform _eventCautionRect;
     private Vector3 _eventCautionBaseScale = Vector3.one;
     private Tile _activeAreaCenter;
+    private GameObject _activeVolcanoVisual;
 
     private void Awake()
     {
@@ -94,10 +100,12 @@ public sealed class RandomEventsManager : MonoBehaviour
         ClearAreaHighlight();
         StopPulse();
         HideCautionWithoutLookup();
+        DespawnVolcanoVisual();
     }
 
     private void OnDestroy()
     {
+        DespawnVolcanoVisual();
         ReleaseHighlightResources();
     }
 
@@ -152,11 +160,23 @@ public sealed class RandomEventsManager : MonoBehaviour
             }
         }
 
+        TrySpawnVolcanoVisual(eventDefinition);
         ShowCaution(eventDefinition);
         var warningDuration = Mathf.Max(0f, eventDefinition.WarningDurationSeconds);
         if (warningDuration > 0f)
         {
-            yield return new WaitForSeconds(warningDuration);
+            var remainingSeconds = warningDuration;
+            UpdateCautionTimer(remainingSeconds);
+            while (remainingSeconds > 0f)
+            {
+                remainingSeconds -= Time.deltaTime;
+                UpdateCautionTimer(remainingSeconds);
+                yield return null;
+            }
+        }
+        else
+        {
+            UpdateCautionTimer(0f);
         }
 
         if (eventDefinition.EventType == EventType.Meteor && _activeAreaCenter != null)
@@ -165,6 +185,7 @@ public sealed class RandomEventsManager : MonoBehaviour
         }
 
         yield return PlayEventEndShake(eventDefinition);
+        DespawnVolcanoAfterShake(eventDefinition);
         ApplyEventImpact(eventDefinition);
         ClearAreaHighlight();
         HideCaution();
@@ -360,14 +381,18 @@ public sealed class RandomEventsManager : MonoBehaviour
 
     private Tile SelectAreaCenter(RandomEventDefinition eventDefinition)
     {
-        if (planet == null)
+        if (planet == null || eventDefinition == null)
         {
             return null;
         }
 
-        return eventDefinition.AreaMustStartOnHighland
-            ? planet.GetRandomHighlandTile()
-            : planet.GetRandomTile();
+        if (!eventDefinition.AreaMustStartOnHighland)
+        {
+            return planet.GetRandomTile();
+        }
+
+        var highlandTile = planet.GetRandomHighlandTile();
+        return highlandTile ?? planet.GetRandomTile();
     }
 
     private void ApplyEventImpact(RandomEventDefinition eventDefinition)
@@ -393,6 +418,69 @@ public sealed class RandomEventsManager : MonoBehaviour
         }
     }
 
+    private void TrySpawnVolcanoVisual(RandomEventDefinition eventDefinition)
+    {
+        if (eventDefinition == null
+            || eventDefinition.EventType != EventType.Volcano
+            || planet == null)
+        {
+            return;
+        }
+
+        DespawnVolcanoVisual();
+
+        if (volcanoPrefab == null)
+        {
+            return;
+        }
+
+        var spawnTile = _activeAreaCenter ?? GetAreaImpactTile() ?? SelectAreaCenter(eventDefinition);
+        if (spawnTile == null)
+        {
+            return;
+        }
+
+        if (_activeAreaCenter == null)
+        {
+            _activeAreaCenter = spawnTile;
+        }
+
+        if (eventDefinition.HasArea && _activeAreaTiles.Count == 0)
+        {
+            _activeAreaTiles.AddRange(planet.CollectTileArea(spawnTile, eventDefinition.AreaRadius));
+        }
+
+        var spawnPosition = planet.GetTileWorldSurfaceCenter(spawnTile, volcanoSurfaceOffset);
+        var up = (spawnPosition - planet.transform.position).normalized;
+        if (up.sqrMagnitude <= 0.000001f)
+        {
+            up = Vector3.up;
+        }
+
+        var rotation = Quaternion.FromToRotation(Vector3.up, up);
+        _activeVolcanoVisual = Instantiate(volcanoPrefab, spawnPosition, rotation, planet.transform);
+        _activeVolcanoVisual.name = "Volcano_EventVisual";
+    }
+
+    private void DespawnVolcanoAfterShake(RandomEventDefinition eventDefinition)
+    {
+        if (eventDefinition == null || eventDefinition.EventType != EventType.Volcano)
+        {
+            return;
+        }
+
+        DespawnVolcanoVisual();
+    }
+
+    private void DespawnVolcanoVisual()
+    {
+        if (_activeVolcanoVisual != null)
+        {
+            Destroy(_activeVolcanoVisual);
+            _activeVolcanoVisual = null;
+        }
+    }
+
     private void GoToArea()
     {
         if (_activeAreaCenter == null || planet == null)
@@ -414,6 +502,8 @@ public sealed class RandomEventsManager : MonoBehaviour
         {
             eventNameText.text = eventDefinition.EventName;
         }
+
+        UpdateCautionTimer(eventDefinition != null ? eventDefinition.WarningDurationSeconds : 0f);
 
         UpdateCautionEffects(eventDefinition);
 
@@ -452,15 +542,32 @@ public sealed class RandomEventsManager : MonoBehaviour
             goToAreaButton.gameObject.SetActive(false);
         }
 
+        HideAllCautionEffects();
+        UpdateCautionTimer(0f);
+
         StopPulse();
+    }
+
+    private void UpdateCautionTimer(float remainingSeconds)
+    {
+        if (eventTimerText == null)
+        {
+            return;
+        }
+
+        var clampedSeconds = Mathf.Max(0f, remainingSeconds);
+        var totalSeconds = Mathf.CeilToInt(clampedSeconds);
+        var minutes = totalSeconds / 60;
+        var seconds = totalSeconds % 60;
+        eventTimerText.text = $"{minutes:00}:{seconds:00}";
     }
 
     private void UpdateCautionEffects(RandomEventDefinition eventDefinition)
     {
-        var hasTemperature = false;
-        var hasAtmosphere = false;
-        var temperatureValue = 0f;
-        var atmosphereValue = 0f;
+        var hasTemperaturePlus = false;
+        var hasTemperatureMinus = false;
+        var hasAtmospherePlus = false;
+        var hasAtmosphereMinus = false;
         var showDemolish = eventDefinition != null && eventDefinition.DestroyBuildingsInArea;
 
         if (eventDefinition != null)
@@ -474,37 +581,61 @@ public sealed class RandomEventsManager : MonoBehaviour
                     switch (effect.type)
                     {
                         case TerraformingType.Temperature:
-                            hasTemperature = true;
-                            temperatureValue += effect.value;
+                            if (effect.value > 0f)
+                            {
+                                hasTemperaturePlus = true;
+                            }
+                            else if (effect.value < 0f)
+                            {
+                                hasTemperatureMinus = true;
+                            }
                             break;
                         case TerraformingType.Atmosphere:
-                            hasAtmosphere = true;
-                            atmosphereValue += effect.value;
+                            if (effect.value > 0f)
+                            {
+                                hasAtmospherePlus = true;
+                            }
+                            else if (effect.value < 0f)
+                            {
+                                hasAtmosphereMinus = true;
+                            }
                             break;
                     }
                 }
             }
         }
 
-        if (temperatureEffectObject != null)
-        {
-            temperatureEffectObject.SetActive(hasTemperature);
-        }
+        SetEffectObjectActive(
+            ref temperaturePlusEffectObject,
+            hasTemperaturePlus,
+            "Temperature_plus",
+            "Temperature_Plus",
+            "temperature_plus",
+            "TemperaturePlus");
 
-        if (temperatureEffectSignText != null)
-        {
-            temperatureEffectSignText.text = temperatureValue >= 0f ? "+" : "-";
-        }
+        SetEffectObjectActive(
+            ref temperatureMinusEffectObject,
+            hasTemperatureMinus,
+            "Temperature_minus",
+            "Temperature_Minus",
+            "temperature_minus",
+            "TemperatureMinus");
 
-        if (atmosphereEffectObject != null)
-        {
-            atmosphereEffectObject.SetActive(hasAtmosphere);
-        }
+        SetEffectObjectActive(
+            ref atmospherePlusEffectObject,
+            hasAtmospherePlus,
+            "Atmosphere_plus",
+            "Atmosphere_Plus",
+            "atmosphere_plus",
+            "AtmospherePlus");
 
-        if (atmosphereEffectSignText != null)
-        {
-            atmosphereEffectSignText.text = atmosphereValue >= 0f ? "+" : "-";
-        }
+        SetEffectObjectActive(
+            ref atmosphereMinusEffectObject,
+            hasAtmosphereMinus,
+            "Atmosphere_minus",
+            "Atmosphere_Minus",
+            "atmosphere_minus",
+            "AtmosphereMinus");
 
         if (demolishEffectObject != null)
         {
@@ -513,7 +644,74 @@ public sealed class RandomEventsManager : MonoBehaviour
 
         if (effectsRoot != null)
         {
-            effectsRoot.SetActive(hasTemperature || hasAtmosphere || showDemolish);
+            effectsRoot.SetActive(
+                hasTemperaturePlus
+                || hasTemperatureMinus
+                || hasAtmospherePlus
+                || hasAtmosphereMinus
+                || showDemolish);
+        }
+    }
+
+    private void HideAllCautionEffects()
+    {
+        if (temperaturePlusEffectObject != null)
+        {
+            temperaturePlusEffectObject.SetActive(false);
+        }
+
+        if (temperatureMinusEffectObject != null)
+        {
+            temperatureMinusEffectObject.SetActive(false);
+        }
+
+        if (atmospherePlusEffectObject != null)
+        {
+            atmospherePlusEffectObject.SetActive(false);
+        }
+
+        if (atmosphereMinusEffectObject != null)
+        {
+            atmosphereMinusEffectObject.SetActive(false);
+        }
+
+        if (demolishEffectObject != null)
+        {
+            demolishEffectObject.SetActive(false);
+        }
+
+        if (effectsRoot != null)
+        {
+            effectsRoot.SetActive(false);
+        }
+    }
+
+    private void SetEffectObjectActive(ref GameObject effectObject, bool isActive, params string[] candidateNames)
+    {
+        if (effectObject == null && eventCaution != null && candidateNames != null)
+        {
+            for (var i = 0; i < candidateNames.Length; i++)
+            {
+                var candidateName = candidateNames[i];
+                if (string.IsNullOrWhiteSpace(candidateName))
+                {
+                    continue;
+                }
+
+                var transform = FindChildByName(eventCaution.transform, candidateName);
+                if (transform == null)
+                {
+                    continue;
+                }
+
+                effectObject = transform.gameObject;
+                break;
+            }
+        }
+
+        if (effectObject != null)
+        {
+            effectObject.SetActive(isActive);
         }
     }
 
@@ -773,6 +971,23 @@ public sealed class RandomEventsManager : MonoBehaviour
             eventNameText = eventCaution.GetComponentInChildren<TMP_Text>(true);
         }
 
+        if (eventTimerText == null)
+        {
+            eventTimerText =
+                FindText(eventCaution.transform, "Timer")
+                ?? FindText(eventCaution.transform, "TimerLabel")
+                ?? FindText(eventCaution.transform, "timer");
+
+            if (eventTimerText == null)
+            {
+                var timerTransform = FindChildByName(eventCaution.transform, "Timer");
+                if (timerTransform != null)
+                {
+                    eventTimerText = timerTransform.GetComponentInChildren<TMP_Text>(true);
+                }
+            }
+        }
+
         if (goToAreaButton == null)
         {
             var buttonTransform = FindChildByName(eventCaution.transform, "GoToArea");
@@ -785,30 +1000,40 @@ public sealed class RandomEventsManager : MonoBehaviour
             effectsRoot = effectsTransform != null ? effectsTransform.gameObject : null;
         }
 
-        if (temperatureEffectObject == null)
+        if (temperaturePlusEffectObject == null)
         {
-            var temperatureTransform = FindChildByName(eventCaution.transform, "Temperature");
-            temperatureEffectObject = temperatureTransform != null ? temperatureTransform.gameObject : null;
+            var temperaturePlusTransform =
+                FindChildByName(eventCaution.transform, "Temperature_plus")
+                ?? FindChildByName(eventCaution.transform, "Temperature_Plus")
+                ?? FindChildByName(eventCaution.transform, "temperature_plus");
+            temperaturePlusEffectObject = temperaturePlusTransform != null ? temperaturePlusTransform.gameObject : null;
         }
 
-        if (temperatureEffectSignText == null && temperatureEffectObject != null)
+        if (temperatureMinusEffectObject == null)
         {
-            temperatureEffectSignText = temperatureEffectObject.GetComponentInChildren<TMP_Text>(true);
+            var temperatureMinusTransform =
+                FindChildByName(eventCaution.transform, "Temperature_minus")
+                ?? FindChildByName(eventCaution.transform, "Temperature_Minus")
+                ?? FindChildByName(eventCaution.transform, "temperature_minus");
+            temperatureMinusEffectObject = temperatureMinusTransform != null ? temperatureMinusTransform.gameObject : null;
         }
 
-        if (atmosphereEffectObject == null)
+        if (atmospherePlusEffectObject == null)
         {
-            var atmosphereTransform =
-                FindChildByName(eventCaution.transform, "Atmosphere")
-                ?? FindChildByName(eventCaution.transform, "Atmosprhere")
-                ?? FindChildByName(eventCaution.transform, "Atmpsphere")
-                ?? FindChildByName(eventCaution.transform, "atmpsphere");
-            atmosphereEffectObject = atmosphereTransform != null ? atmosphereTransform.gameObject : null;
+            var atmospherePlusTransform =
+                FindChildByName(eventCaution.transform, "Atmosphere_plus")
+                ?? FindChildByName(eventCaution.transform, "Atmosphere_Plus")
+                ?? FindChildByName(eventCaution.transform, "atmosphere_plus");
+            atmospherePlusEffectObject = atmospherePlusTransform != null ? atmospherePlusTransform.gameObject : null;
         }
 
-        if (atmosphereEffectSignText == null && atmosphereEffectObject != null)
+        if (atmosphereMinusEffectObject == null)
         {
-            atmosphereEffectSignText = atmosphereEffectObject.GetComponentInChildren<TMP_Text>(true);
+            var atmosphereMinusTransform =
+                FindChildByName(eventCaution.transform, "Atmosphere_minus")
+                ?? FindChildByName(eventCaution.transform, "Atmosphere_Minus")
+                ?? FindChildByName(eventCaution.transform, "atmosphere_minus");
+            atmosphereMinusEffectObject = atmosphereMinusTransform != null ? atmosphereMinusTransform.gameObject : null;
         }
 
         if (demolishEffectObject == null)

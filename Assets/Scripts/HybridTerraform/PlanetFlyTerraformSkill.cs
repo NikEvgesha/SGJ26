@@ -1,7 +1,6 @@
 using LittlePlanet.PlanetSystem;
 using LittlePlanet.RuntimeInput;
 using LittlePlanet.UI;
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 #if ENABLE_INPUT_SYSTEM
@@ -39,9 +38,11 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField] private PlanetCameraController orbitCameraController;
         [SerializeField] private Collider planetSurfaceCollider;
         [SerializeField] private Transform shipRoot;
+        [SerializeField] private GameObject shipPrefab;
         [SerializeField] private Material runtimeShipMaterial;
         [SerializeField] private Button activateButton;
-        [SerializeField] private TMP_Text statusText;
+        [SerializeField] private GameObject flyIcon;
+        [SerializeField] private GameObject returnIcon;
         [SerializeField] private WindowManager windowManager;
 
         [Header("Skill")]
@@ -108,12 +109,12 @@ namespace LittlePlanet.HybridTerraform
         private Quaternion _savedShipRotation;
         private bool _savedShipActive;
         private bool _shipStateCached;
+        private bool _ownsRuntimeShipInstance;
         private float _cameraPitch;
         private bool _savedOrbitCameraEnabled = true;
         private bool _savedOrbitZoomEnabled = true;
         private bool _orbitControlsCached;
         private float _nextButtonStateUpdateTime;
-        private string _lastStatusText;
         private float _nextCompletionHintUpdateTime;
         private bool _ownsCompletionHintArrow;
         public bool IsFlightModeActive => _state == SkillState.Flying || _state == SkillState.Approaching;
@@ -127,12 +128,14 @@ namespace LittlePlanet.HybridTerraform
         {
             ResolveReferences();
             BindButton();
+            UpdateIconState();
         }
 
         private void OnEnable()
         {
             ResolveReferences();
             BindButton();
+            UpdateIconState();
 
             if (planet != null)
             {
@@ -150,10 +153,16 @@ namespace LittlePlanet.HybridTerraform
             UnbindButton();
             RestoreOrbitControls();
             SetCompletionHintVisible(false);
+            UpdateIconState();
         }
 
         private void OnDestroy()
         {
+            if (_ownsRuntimeShipInstance && shipRoot != null)
+            {
+                Destroy(shipRoot.gameObject);
+            }
+
             if (_ownsCompletionHintArrow && completionHintArrow != null)
             {
                 Destroy(completionHintArrow.gameObject);
@@ -176,7 +185,7 @@ namespace LittlePlanet.HybridTerraform
             }
 
             UpdateButtonState();
-            UpdateStatusText();
+            UpdateIconState();
         }
 
         private void OnValidate()
@@ -756,7 +765,7 @@ namespace LittlePlanet.HybridTerraform
             _flightEndTime = 0f;
             _cooldownEndTime = 0f;
             _state = SkillState.Ready;
-            UpdateStatusText();
+            UpdateIconState();
         }
 
         private void LogSkill(string message)
@@ -962,6 +971,7 @@ namespace LittlePlanet.HybridTerraform
                 windowManager = WindowManager.Instance;
             }
 
+            ResolveActionIcons();
             ResolvePlanetSurfaceCollider();
         }
 
@@ -992,10 +1002,22 @@ namespace LittlePlanet.HybridTerraform
                 return;
             }
 
-            var shipObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            shipObject.name = "TerraformShip_Runtime";
-            shipObject.transform.localScale = Vector3.one * 0.5f;
-            ApplyRuntimeShipMaterial(shipObject);
+            GameObject shipObject;
+            if (shipPrefab != null)
+            {
+                shipObject = Instantiate(shipPrefab);
+                shipObject.name = "Ship_Runtime";
+            }
+            else
+            {
+                shipObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                shipObject.name = "TerraformShip_Runtime";
+                shipObject.transform.localScale = Vector3.one * 0.5f;
+                ApplyRuntimeShipMaterial(shipObject);
+            }
+
+            shipObject.SetActive(false);
+            _ownsRuntimeShipInstance = true;
             shipRoot = shipObject.transform;
         }
 
@@ -1149,28 +1171,62 @@ namespace LittlePlanet.HybridTerraform
             activateButton.interactable = true;
         }
 
-        private void UpdateStatusText()
+        private void UpdateIconState()
         {
-            if (statusText == null)
+            var showReturnIcon = IsFlightModeActive;
+            var showFlyIcon = !showReturnIcon;
+
+            if (flyIcon != null)
+            {
+                flyIcon.SetActive(showFlyIcon);
+            }
+
+            if (returnIcon != null)
+            {
+                returnIcon.SetActive(showReturnIcon);
+            }
+        }
+
+        private void ResolveActionIcons()
+        {
+            if (activateButton == null)
             {
                 return;
             }
 
-            var nextText = _state switch
+            if (flyIcon == null)
             {
-                SkillState.Aiming => "Back",
-                SkillState.Approaching => "Back",
-                SkillState.Flying => "Back",
-                _ => "Fly"
-            };
-
-            if (string.Equals(_lastStatusText, nextText, System.StringComparison.Ordinal))
-            {
-                return;
+                flyIcon = FindChildObjectByName(activateButton.transform, "FlyIcon")
+                    ?? FindChildObjectByName(activateButton.transform, "flyIcon")
+                    ?? FindChildObjectByName(activateButton.transform, "Fly");
             }
 
-            _lastStatusText = nextText;
-            statusText.text = nextText;
+            if (returnIcon == null)
+            {
+                returnIcon = FindChildObjectByName(activateButton.transform, "ReturnIcon")
+                    ?? FindChildObjectByName(activateButton.transform, "returnIcon")
+                    ?? FindChildObjectByName(activateButton.transform, "BackIcon");
+            }
+        }
+
+        private static GameObject FindChildObjectByName(Transform root, string targetName)
+        {
+            if (root == null || string.IsNullOrWhiteSpace(targetName))
+            {
+                return null;
+            }
+
+            var children = root.GetComponentsInChildren<Transform>(true);
+            for (var i = 0; i < children.Length; i++)
+            {
+                var child = children[i];
+                if (child != null && string.Equals(child.name, targetName, System.StringComparison.Ordinal))
+                {
+                    return child.gameObject;
+                }
+            }
+
+            return null;
         }
 
         private static bool TryGetMoveInput(out Vector2 value)

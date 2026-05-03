@@ -9,6 +9,8 @@ public class UpgradePanel : MonoBehaviour, IManagedWindow
 {
     [Header("References")]
     [SerializeField] private Button upgradeButton;
+    [SerializeField] private Button closeButton;
+    [SerializeField] private string closeButtonObjectName = "CloseArea";
     [SerializeField] private UpgradeSlotUI slotPrefab;
     [SerializeField] private Transform slotsRoot;
     [SerializeField] private string slotsRootObjectName = "UpgradesRoot";
@@ -37,7 +39,7 @@ public class UpgradePanel : MonoBehaviour, IManagedWindow
     private void OnEnable()
     {
         ResolveReferences();
-        BindUpgradeButton();
+        BindButtons();
         windowManager?.Register(this);
         BindCurrencyEvents();
         RefreshSlots();
@@ -46,7 +48,7 @@ public class UpgradePanel : MonoBehaviour, IManagedWindow
     private void OnDisable()
     {
         UnbindCurrencyEvents();
-        UnbindUpgradeButton();
+        UnbindButtons();
         windowManager?.Unregister(this);
     }
 
@@ -165,6 +167,20 @@ public class UpgradePanel : MonoBehaviour, IManagedWindow
                 upgradeButton = buttonObject.GetComponent<Button>();
             }
         }
+
+        if (closeButton == null)
+        {
+            var closeButtonTransform = FindChildByName(transform, closeButtonObjectName);
+            if (closeButtonTransform == null && transform.parent != null)
+            {
+                closeButtonTransform = FindChildByName(transform.parent, closeButtonObjectName);
+            }
+
+            if (closeButtonTransform != null)
+            {
+                closeButton = closeButtonTransform.GetComponent<Button>();
+            }
+        }
     }
 
     private void EnsureCanvasGroup()
@@ -180,23 +196,42 @@ public class UpgradePanel : MonoBehaviour, IManagedWindow
         }
     }
 
-    private void BindUpgradeButton()
+    private void BindButtons()
     {
-        if (upgradeButton == null)
+        if (upgradeButton == null && closeButton == null)
         {
-            return;
+            ResolveReferences();
         }
 
-        upgradeButton.onClick.RemoveListener(Toggle);
-        upgradeButton.onClick.AddListener(Toggle);
+        if (upgradeButton != null)
+        {
+            upgradeButton.onClick.RemoveListener(Toggle);
+            upgradeButton.onClick.AddListener(Toggle);
+        }
+
+        if (closeButton != null)
+        {
+            closeButton.onClick.RemoveListener(CloseWindow);
+            closeButton.onClick.AddListener(CloseWindow);
+        }
     }
 
-    private void UnbindUpgradeButton()
+    private void UnbindButtons()
     {
         if (upgradeButton != null)
         {
             upgradeButton.onClick.RemoveListener(Toggle);
         }
+
+        if (closeButton != null)
+        {
+            closeButton.onClick.RemoveListener(CloseWindow);
+        }
+    }
+
+    private void CloseWindow()
+    {
+        SetWindowOpen(false);
     }
 
     private void BindCurrencyEvents()

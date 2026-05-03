@@ -30,6 +30,7 @@ public class SoundManager : MonoBehaviour
     [Header("Settings UI")]
     [SerializeField] private string settingsPanelObjectName = "Settings";
     [SerializeField] private string settingsButtonObjectName = "SettingsButton";
+    [SerializeField] private string settingsCloseButtonObjectName = "CloseArea";
     [SerializeField] private string musicSliderObjectName = "MusicSlider";
     [SerializeField] private string soundSliderObjectName = "SoundSlider";
 
@@ -41,6 +42,7 @@ public class SoundManager : MonoBehaviour
     private GameObject _settingsPanelObject;
     private CanvasGroup _settingsCanvasGroup;
     private Button _settingsButton;
+    private Button _settingsCloseButton;
     private Slider _musicSlider;
     private Slider _soundSlider;
     private SettingsPanel _settingsPanelController;
@@ -48,6 +50,7 @@ public class SoundManager : MonoBehaviour
     private void Awake()
     {
         ResolveReferences(createMissingSources: true);
+        PrepareSourcesForManualStart();
         LoadVolumes();
         ConfigureSources();
 
@@ -69,6 +72,7 @@ public class SoundManager : MonoBehaviour
 
     private void Start()
     {
+        CloseSettingsPanel();
         PlayMusic();
         UpdateShipNoiseState(force: true);
     }
@@ -154,8 +158,29 @@ public class SoundManager : MonoBehaviour
 
     private void ConfigureSources()
     {
-        ConfigureSource(musicSource, musicClip, musicVolume, playOnAwake: true);
+        ConfigureSource(musicSource, musicClip, musicVolume, playOnAwake: false);
         ConfigureSource(shipNoiseSource, shipNoiseClip, shipNoiseVolume, playOnAwake: false);
+    }
+
+    private void PrepareSourcesForManualStart()
+    {
+        if (musicSource != null)
+        {
+            musicSource.playOnAwake = false;
+            if (musicSource.isPlaying)
+            {
+                musicSource.Stop();
+            }
+        }
+
+        if (shipNoiseSource != null)
+        {
+            shipNoiseSource.playOnAwake = false;
+            if (shipNoiseSource.isPlaying)
+            {
+                shipNoiseSource.Stop();
+            }
+        }
     }
 
     private void HandleSettingsToggleInput()
@@ -213,6 +238,19 @@ public class SoundManager : MonoBehaviour
         _settingsCanvasGroup.blocksRaycasts = isOpen;
     }
 
+    private void CloseSettingsPanel()
+    {
+        ResolveUiReferences();
+
+        if (_settingsPanelController != null)
+        {
+            _settingsPanelController.SetWindowOpen(false);
+            return;
+        }
+
+        SetSettingsOpen(false);
+    }
+
     private void ResolveUiReferences()
     {
         _settingsPanelObject ??= FindObjectByName(settingsPanelObjectName);
@@ -222,6 +260,11 @@ public class SoundManager : MonoBehaviour
         if (_settingsPanelObject != null && _settingsPanelController == null)
         {
             _settingsPanelController = _settingsPanelObject.GetComponent<SettingsPanel>();
+        }
+
+        if (_settingsCloseButton == null && _settingsPanelObject != null)
+        {
+            _settingsCloseButton = FindChildComponentByName<Button>(_settingsPanelObject.transform, settingsCloseButtonObjectName);
         }
 
         if (_settingsPanelObject != null && _settingsCanvasGroup == null)
@@ -267,6 +310,12 @@ public class SoundManager : MonoBehaviour
             }
         }
 
+        if (_settingsCloseButton != null)
+        {
+            _settingsCloseButton.onClick.RemoveListener(CloseSettingsPanel);
+            _settingsCloseButton.onClick.AddListener(CloseSettingsPanel);
+        }
+
         if (_musicSlider != null)
         {
             _musicSlider.onValueChanged.RemoveListener(SetMusicVolume);
@@ -287,6 +336,11 @@ public class SoundManager : MonoBehaviour
         if (_settingsButton != null)
         {
             _settingsButton.onClick.RemoveListener(ToggleSettingsPanel);
+        }
+
+        if (_settingsCloseButton != null)
+        {
+            _settingsCloseButton.onClick.RemoveListener(CloseSettingsPanel);
         }
 
         if (_musicSlider != null)
@@ -346,6 +400,26 @@ public class SoundManager : MonoBehaviour
     {
         var target = FindObjectByName(objectName);
         return target != null ? target.GetComponent<T>() : null;
+    }
+
+    private static T FindChildComponentByName<T>(Transform root, string objectName) where T : Component
+    {
+        if (root == null || string.IsNullOrWhiteSpace(objectName))
+        {
+            return null;
+        }
+
+        var children = root.GetComponentsInChildren<Transform>(true);
+        for (var i = 0; i < children.Length; i++)
+        {
+            var child = children[i];
+            if (child != null && string.Equals(child.name, objectName, System.StringComparison.Ordinal))
+            {
+                return child.GetComponent<T>();
+            }
+        }
+
+        return null;
     }
 
     private static void ConfigureSource(AudioSource source, AudioClip clip, float volume, bool playOnAwake)

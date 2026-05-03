@@ -130,14 +130,32 @@ namespace LittlePlanet.PlanetSystem
                 return;
             }
 
-            var horizontalSign = invertHorizontal ? 1f : -1f;
+            var horizontalSign = invertHorizontal ? -1f : 1f;
             var verticalSign = invertVertical ? -1f : 1f;
 
             var yaw = dragDelta.x * rotationSpeed * horizontalSign;
             var pitch = dragDelta.y * rotationSpeed * verticalSign;
+            var yawRotation = Quaternion.AngleAxis(yaw, Vector3.up);
+            var nextDirection = yawRotation * _cameraDirection;
 
-            planetRoot.Rotate(Vector3.up, yaw, Space.World);
-            planetRoot.Rotate(controlledCamera.transform.right, pitch, Space.World);
+            var pitchAxis = Vector3.Cross(Vector3.up, nextDirection);
+            if (pitchAxis.sqrMagnitude > 0.000001f)
+            {
+                pitchAxis.Normalize();
+                var pitchRotation = Quaternion.AngleAxis(pitch, pitchAxis);
+                nextDirection = pitchRotation * nextDirection;
+            }
+
+            var normalizedDirection = nextDirection.sqrMagnitude > 0.000001f
+                ? nextDirection.normalized
+                : _cameraDirection;
+            var verticalDot = Mathf.Abs(Vector3.Dot(normalizedDirection, Vector3.up));
+            if (verticalDot < 0.995f)
+            {
+                _cameraDirection = normalizedDirection;
+            }
+
+            ApplyCameraDistance();
         }
 
         private void ApplyCameraDistance()

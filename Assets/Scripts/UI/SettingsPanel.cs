@@ -9,11 +9,10 @@ namespace LittlePlanet.UI
         [Header("References")]
         [SerializeField] private Button settingsButton;
         [SerializeField] private string settingsButtonObjectName = "SettingsButton";
+        [SerializeField] private Button closeButton;
+        [SerializeField] private string closeButtonObjectName = "CloseArea";
         [SerializeField] private CanvasGroup canvasGroup;
         [SerializeField] private WindowManager windowManager;
-
-        [Header("State")]
-        [SerializeField] private bool startOpen;
 
         private bool _isOpen;
 
@@ -22,19 +21,19 @@ namespace LittlePlanet.UI
         private void Awake()
         {
             ResolveReferences();
-            SetWindowOpen(startOpen);
+            SetWindowOpen(false);
         }
 
         private void OnEnable()
         {
             ResolveReferences();
             windowManager?.Register(this);
-            BindButton();
+            BindButtons();
         }
 
         private void OnDisable()
         {
-            UnbindButton();
+            UnbindButtons();
             windowManager?.Unregister(this);
         }
 
@@ -92,6 +91,15 @@ namespace LittlePlanet.UI
                     settingsButton = fallbackButtonObject.GetComponent<Button>();
                 }
             }
+
+            if (closeButton == null)
+            {
+                var closeButtonTransform = FindChildByName(transform, closeButtonObjectName);
+                if (closeButtonTransform != null)
+                {
+                    closeButton = closeButtonTransform.GetComponent<Button>();
+                }
+            }
         }
 
         private void EnsureCanvasGroup()
@@ -107,23 +115,62 @@ namespace LittlePlanet.UI
             }
         }
 
-        private void BindButton()
+        private void BindButtons()
         {
             if (settingsButton == null)
             {
-                return;
+                ResolveReferences();
             }
 
-            settingsButton.onClick.RemoveListener(Toggle);
-            settingsButton.onClick.AddListener(Toggle);
+            if (settingsButton != null)
+            {
+                settingsButton.onClick.RemoveListener(Toggle);
+                settingsButton.onClick.AddListener(Toggle);
+            }
+
+            if (closeButton != null)
+            {
+                closeButton.onClick.RemoveListener(CloseWindow);
+                closeButton.onClick.AddListener(CloseWindow);
+            }
         }
 
-        private void UnbindButton()
+        private void UnbindButtons()
         {
             if (settingsButton != null)
             {
                 settingsButton.onClick.RemoveListener(Toggle);
             }
+
+            if (closeButton != null)
+            {
+                closeButton.onClick.RemoveListener(CloseWindow);
+            }
+        }
+
+        private void CloseWindow()
+        {
+            SetWindowOpen(false);
+        }
+
+        private static Transform FindChildByName(Transform root, string childName)
+        {
+            if (root == null || string.IsNullOrWhiteSpace(childName))
+            {
+                return null;
+            }
+
+            var children = root.GetComponentsInChildren<Transform>(true);
+            for (var i = 0; i < children.Length; i++)
+            {
+                var child = children[i];
+                if (child != null && string.Equals(child.name, childName, System.StringComparison.Ordinal))
+                {
+                    return child;
+                }
+            }
+
+            return null;
         }
     }
 }

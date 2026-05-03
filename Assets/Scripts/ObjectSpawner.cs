@@ -370,7 +370,9 @@ namespace LittlePlanet.PlanetSystem
                 return;
             }
 
-            targetTransform.rotation = Quaternion.FromToRotation(Vector3.up, up);
+            var alignRotation = Quaternion.FromToRotation(Vector3.up, up);
+            var randomYaw = Quaternion.AngleAxis(UnityEngine.Random.Range(0f, 360f), up);
+            targetTransform.rotation = randomYaw * alignRotation;
         }
 
         private bool IsFlightMode(Camera cameraToUse)

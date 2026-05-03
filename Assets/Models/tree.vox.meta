@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 7c14861b5a7f87647b88480335f61c61
+guid: 03ef96bdfc20c3046bf02747954913e7
 ScriptedImporter:
   internalIDToNameTable: []
   externalObjects: {}
@@ -10,8 +10,8 @@ ScriptedImporter:
   script: {fileID: 11500000, guid: eeb34f3ead148d04e8630fc3f79cbc1a, type: 3}
   dataVersion: 7
   fileType: 0
-  gameObjectName: garden 2
-  meshMode: 1
+  gameObjectName: tree
+  meshMode: 0
   importMode: 1
   importScale: {x: 1, y: 1, z: 1}
   importOffset: {x: 0, y: 0, z: 0}
@@ -35,14 +35,14 @@ ScriptedImporter:
   generateMipMaps: 0
   colliderType: 0
   chunkPivotT: {x: 0.5, y: 0.5, z: 0.5}
-  createContactChunkFaces: 1
+  createContactChunkFaces: 0
   materialMode: 0
   materials:
-  - {fileID: -156486658544998735, guid: 7c14861b5a7f87647b88480335f61c61, type: 3}
+  - {fileID: -2022727499340602527, guid: eaea2781de9d0a848962bc429bed89f6, type: 3}
   materialNames:
-  - garden 2_0
+  - tree_0
   remappedMaterials:
-  - name: garden 2_0
+  - name: tree_0
     material: {instanceID: 0}
   export: 0
   legacyVoxImport: 0

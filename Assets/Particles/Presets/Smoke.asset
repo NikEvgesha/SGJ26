@@ -13,14 +13,14 @@ MonoBehaviour:
   m_Name: Smoke
   m_EditorClassIdentifier: Assembly-CSharp::LittlePlanet.Particles.UniversalParticlePreset
   maxParticles: 350
-  duration: 3
+  duration: 10
   looping: 1
-  prewarm: 0
-  emissionRate: 35
+  prewarm: 1
+  emissionRate: 50
   burstCount: 0
   lifetime: {x: 1.4, y: 2.6}
   speed: {x: 0.2, y: 0.8}
-  size: {x: 0.25, y: 0.9}
+  size: {x: 0.5, y: 1.8}
   randomRotation: 1
   gravityModifier: -0.05
   colorOverLifetime:

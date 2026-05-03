@@ -49,6 +49,7 @@ MonoBehaviour:
   orbitCameraController: {fileID: 0}
   planetSurfaceCollider: {fileID: 0}
   shipRoot: {fileID: 0}
+  shipPrefab: {fileID: 2450079655949394915, guid: 93f10ae9e39f43f4e82ed498e80fc1a3, type: 3}
   activateButton: {fileID: 0}
   statusText: {fileID: 0}
   flightDuration: 5
