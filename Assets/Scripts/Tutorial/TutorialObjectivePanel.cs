@@ -11,6 +11,8 @@ public sealed class TutorialObjectivePanel : MonoBehaviour
     [SerializeField] private RectTransform contentRoot;
 
     private bool _isCollapsed;
+    private bool _isBuilding;
+    private bool _isBuilt;
 
     public static TutorialObjectivePanel CreateOrFind(Transform uiRoot)
     {
@@ -88,16 +90,21 @@ public sealed class TutorialObjectivePanel : MonoBehaviour
 
     public void SetCollapsed(bool isCollapsed)
     {
-        EnsureBuilt();
         _isCollapsed = isCollapsed;
+        EnsureBuilt();
+        ApplyCollapsedState();
+    }
+
+    private void ApplyCollapsedState()
+    {
         if (contentRoot != null)
         {
-            contentRoot.gameObject.SetActive(!isCollapsed);
+            contentRoot.gameObject.SetActive(!_isCollapsed);
         }
 
         if (collapseButtonLabel != null)
         {
-            collapseButtonLabel.text = isCollapsed ? ">" : "<";
+            collapseButtonLabel.text = _isCollapsed ? ">" : "<";
         }
     }
 
@@ -108,69 +115,83 @@ public sealed class TutorialObjectivePanel : MonoBehaviour
 
     private void EnsureBuilt()
     {
-        canvasGroup ??= GetComponent<CanvasGroup>() ?? gameObject.AddComponent<CanvasGroup>();
-
-        if (contentRoot == null)
+        if (_isBuilt || _isBuilding)
         {
-            contentRoot = EnsureChildRect(transform, "Content");
-            contentRoot.anchorMin = new Vector2(0f, 0f);
-            contentRoot.anchorMax = new Vector2(1f, 1f);
-            contentRoot.offsetMin = new Vector2(12f, 12f);
-            contentRoot.offsetMax = new Vector2(-54f, -12f);
+            return;
         }
 
-        if (collapseButton == null)
+        _isBuilding = true;
+        try
         {
-            var buttonRoot = EnsureChildRect(transform, "CollapseButton");
-            buttonRoot.anchorMin = new Vector2(1f, 1f);
-            buttonRoot.anchorMax = new Vector2(1f, 1f);
-            buttonRoot.pivot = new Vector2(1f, 1f);
-            buttonRoot.sizeDelta = new Vector2(34f, 34f);
-            buttonRoot.anchoredPosition = new Vector2(-10f, -10f);
+            canvasGroup ??= GetComponent<CanvasGroup>() ?? gameObject.AddComponent<CanvasGroup>();
 
-            var buttonImage = buttonRoot.GetComponent<Image>() ?? buttonRoot.gameObject.AddComponent<Image>();
-            buttonImage.color = new Color(0.14f, 0.18f, 0.24f, 0.95f);
+            if (contentRoot == null)
+            {
+                contentRoot = EnsureChildRect(transform, "Content");
+                contentRoot.anchorMin = new Vector2(0f, 0f);
+                contentRoot.anchorMax = new Vector2(1f, 1f);
+                contentRoot.offsetMin = new Vector2(12f, 12f);
+                contentRoot.offsetMax = new Vector2(-54f, -12f);
+            }
 
-            collapseButton = buttonRoot.GetComponent<Button>() ?? buttonRoot.gameObject.AddComponent<Button>();
-            collapseButton.targetGraphic = buttonImage;
+            if (collapseButton == null)
+            {
+                var buttonRoot = EnsureChildRect(transform, "CollapseButton");
+                buttonRoot.anchorMin = new Vector2(1f, 1f);
+                buttonRoot.anchorMax = new Vector2(1f, 1f);
+                buttonRoot.pivot = new Vector2(1f, 1f);
+                buttonRoot.sizeDelta = new Vector2(34f, 34f);
+                buttonRoot.anchoredPosition = new Vector2(-10f, -10f);
+
+                var buttonImage = buttonRoot.GetComponent<Image>() ?? buttonRoot.gameObject.AddComponent<Image>();
+                buttonImage.color = new Color(0.14f, 0.18f, 0.24f, 0.95f);
+
+                collapseButton = buttonRoot.GetComponent<Button>() ?? buttonRoot.gameObject.AddComponent<Button>();
+                collapseButton.targetGraphic = buttonImage;
+            }
+
+            if (collapseButtonLabel == null)
+            {
+                var labelRect = EnsureChildRect(collapseButton.transform, "Label");
+                labelRect.anchorMin = Vector2.zero;
+                labelRect.anchorMax = Vector2.one;
+                labelRect.offsetMin = Vector2.zero;
+                labelRect.offsetMax = Vector2.zero;
+
+                collapseButtonLabel = labelRect.GetComponent<TMP_Text>() ?? labelRect.gameObject.AddComponent<TextMeshProUGUI>();
+                collapseButtonLabel.alignment = TextAlignmentOptions.Center;
+                collapseButtonLabel.fontSize = 20f;
+                collapseButtonLabel.color = Color.white;
+                collapseButtonLabel.text = "<";
+                TryApplySharedFont(collapseButtonLabel);
+            }
+
+            if (objectiveText == null)
+            {
+                var textRect = EnsureChildRect(contentRoot, "ObjectiveText");
+                textRect.anchorMin = Vector2.zero;
+                textRect.anchorMax = Vector2.one;
+                textRect.offsetMin = Vector2.zero;
+                textRect.offsetMax = Vector2.zero;
+
+                objectiveText = textRect.GetComponent<TMP_Text>() ?? textRect.gameObject.AddComponent<TextMeshProUGUI>();
+                objectiveText.alignment = TextAlignmentOptions.TopLeft;
+                objectiveText.enableWordWrapping = true;
+                objectiveText.fontSize = 26f;
+                objectiveText.color = Color.white;
+                objectiveText.text = string.Empty;
+                TryApplySharedFont(objectiveText);
+            }
+
+            collapseButton.onClick.RemoveListener(ToggleCollapsed);
+            collapseButton.onClick.AddListener(ToggleCollapsed);
+            ApplyCollapsedState();
+            _isBuilt = true;
         }
-
-        if (collapseButtonLabel == null)
+        finally
         {
-            var labelRect = EnsureChildRect(collapseButton.transform, "Label");
-            labelRect.anchorMin = Vector2.zero;
-            labelRect.anchorMax = Vector2.one;
-            labelRect.offsetMin = Vector2.zero;
-            labelRect.offsetMax = Vector2.zero;
-
-            collapseButtonLabel = labelRect.GetComponent<TMP_Text>() ?? labelRect.gameObject.AddComponent<TextMeshProUGUI>();
-            collapseButtonLabel.alignment = TextAlignmentOptions.Center;
-            collapseButtonLabel.fontSize = 20f;
-            collapseButtonLabel.color = Color.white;
-            collapseButtonLabel.text = "<";
-            TryApplySharedFont(collapseButtonLabel);
+            _isBuilding = false;
         }
-
-        if (objectiveText == null)
-        {
-            var textRect = EnsureChildRect(contentRoot, "ObjectiveText");
-            textRect.anchorMin = Vector2.zero;
-            textRect.anchorMax = Vector2.one;
-            textRect.offsetMin = Vector2.zero;
-            textRect.offsetMax = Vector2.zero;
-
-            objectiveText = textRect.GetComponent<TMP_Text>() ?? textRect.gameObject.AddComponent<TextMeshProUGUI>();
-            objectiveText.alignment = TextAlignmentOptions.TopLeft;
-            objectiveText.enableWordWrapping = true;
-            objectiveText.fontSize = 26f;
-            objectiveText.color = Color.white;
-            objectiveText.text = string.Empty;
-            TryApplySharedFont(objectiveText);
-        }
-
-        collapseButton.onClick.RemoveListener(ToggleCollapsed);
-        collapseButton.onClick.AddListener(ToggleCollapsed);
-        SetCollapsed(_isCollapsed);
     }
 
     private static RectTransform EnsureChildRect(Transform parent, string childName)
