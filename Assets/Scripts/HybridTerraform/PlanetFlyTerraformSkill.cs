@@ -1,4 +1,5 @@
 using LittlePlanet.PlanetSystem;
+using LittlePlanet.RuntimeInput;
 using LittlePlanet.UI;
 using TMPro;
 using UnityEngine;
@@ -24,6 +25,7 @@ namespace LittlePlanet.HybridTerraform
         private enum FinishReason
         {
             Cancelled,
+            NoCameraCenterHit,
             MissingReferencesDuringApproach,
             MissingApproachTile,
             MissingReferencesDuringFlight,
@@ -43,6 +45,8 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField] private WindowManager windowManager;
 
         [Header("Skill")]
+        [SerializeField] private bool enableHotkey = true;
+        [SerializeField] private KeyCode activationHotkey = KeyCode.F;
         [SerializeField, Min(5f)] private float flightDuration = 5f;
         [SerializeField, Min(0f)] private float cooldownDuration = 15f;
         [SerializeField, Min(0.1f)] private float approachDuration = 1.25f;
@@ -78,6 +82,15 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField, Min(0f)] private float terraformPowerPerSecond = 0.18f;
         [SerializeField, Min(0f)] private float currencyPerCompletedTile = 25f;
 
+        [Header("Completion Hint")]
+        [SerializeField] private bool showCompletionHint = true;
+        [SerializeField, Range(0f, 100f)] private float completionHintStartPercent = 85f;
+        [SerializeField, Range(0.5f, 1f)] private float incompleteTileThreshold = 0.999f;
+        [SerializeField, Min(0.05f)] private float completionHintUpdateInterval = 0.25f;
+        [SerializeField, Min(0f)] private float completionHintSurfaceOffset = 0.8f;
+        [SerializeField] private Transform completionHintArrow;
+        [SerializeField] private Color generatedHintColor = new(1f, 0.86f, 0.12f, 1f);
+
         [Header("Debug")]
         [SerializeField] private bool logSkillLifecycle = true;
 
@@ -101,6 +114,8 @@ namespace LittlePlanet.HybridTerraform
         private bool _orbitControlsCached;
         private float _nextButtonStateUpdateTime;
         private string _lastStatusText;
+        private float _nextCompletionHintUpdateTime;
+        private bool _ownsCompletionHintArrow;
         public bool IsFlightModeActive => _state == SkillState.Flying || _state == SkillState.Approaching;
         public float FlightDuration => flightDuration;
         public float CooldownDuration => cooldownDuration;
@@ -134,11 +149,21 @@ namespace LittlePlanet.HybridTerraform
 
             UnbindButton();
             RestoreOrbitControls();
+            SetCompletionHintVisible(false);
+        }
+
+        private void OnDestroy()
+        {
+            if (_ownsCompletionHintArrow && completionHintArrow != null)
+            {
+                Destroy(completionHintArrow.gameObject);
+            }
         }
 
         private void Update()
         {
             ResolveReferences();
+            HandleHotkey();
 
             switch (_state)
             {
@@ -147,12 +172,6 @@ namespace LittlePlanet.HybridTerraform
                     break;
                 case SkillState.Flying:
                     UpdateFlight();
-                    break;
-                case SkillState.Cooldown:
-                    if (Time.time >= _cooldownEndTime)
-                    {
-                        _state = SkillState.Ready;
-                    }
                     break;
             }
 
@@ -183,22 +202,38 @@ namespace LittlePlanet.HybridTerraform
             {
                 maxCameraPitch = minCameraPitch;
             }
+
+            completionHintUpdateInterval = Mathf.Max(0.05f, completionHintUpdateInterval);
+            completionHintSurfaceOffset = Mathf.Max(0f, completionHintSurfaceOffset);
         }
 
         public void ActivateSkill()
         {
-            if (_state != SkillState.Ready || Time.time < _cooldownEndTime)
+            if (_state != SkillState.Ready)
             {
                 return;
             }
 
             ResolveReferences();
             windowManager?.CloseAll();
-            _state = SkillState.Aiming;
-            CacheOrbitControls();
-            SetOrbitZoomEnabled(false);
-            LogSkill("Activated. Waiting for planet click.");
-            UpdateStatusText();
+            if (!TryGetCameraCenterTile(out var tile))
+            {
+                LogSkill("Activation failed: camera center ray missed planet.");
+                return;
+            }
+
+            BeginApproachToTile(tile);
+        }
+
+        public void ToggleSkill()
+        {
+            if (_state == SkillState.Aiming || _state == SkillState.Approaching || _state == SkillState.Flying)
+            {
+                CancelSkill();
+                return;
+            }
+
+            ActivateSkill();
         }
 
         public float GetUpgradeValue(UpgradeType upgradeType)
@@ -258,6 +293,17 @@ namespace LittlePlanet.HybridTerraform
                 return;
             }
 
+            BeginApproachToTile(tile);
+        }
+
+        private void BeginApproachToTile(Tile tile)
+        {
+            if (tile == null || planet == null || controlledCamera == null)
+            {
+                FinishFlight(FinishReason.NoCameraCenterHit, restoreCamera: false);
+                return;
+            }
+
             EnsureShipRoot();
             if (shipRoot == null)
             {
@@ -274,11 +320,12 @@ namespace LittlePlanet.HybridTerraform
             _cooldownEndTime = 0f;
             _pendingCurrency = 0f;
             _approachTile = tile;
+            CacheOrbitControls();
             SetOrbitCameraEnabled(false);
             SetOrbitZoomEnabled(false);
 
             _state = SkillState.Approaching;
-            LogSkill($"Third-person approach started. tile={tile.Index}, flightDuration={flightDuration:0.##}, approachDuration={approachDuration:0.##}");
+            LogSkill($"Third-person approach started. tile={tile.Index}, approachDuration={approachDuration:0.##}");
         }
 
         private void UpdateApproach()
@@ -315,10 +362,10 @@ namespace LittlePlanet.HybridTerraform
 
         private void StartFlying()
         {
-            _flightEndTime = Time.time + flightDuration;
-            _cooldownEndTime = _flightEndTime + cooldownDuration;
+            _flightEndTime = 0f;
+            _cooldownEndTime = 0f;
             _state = SkillState.Flying;
-            LogSkill($"Flying started. endsIn={flightDuration:0.##}s");
+            LogSkill("Flying started.");
         }
 
         private void UpdateFlight()
@@ -326,12 +373,6 @@ namespace LittlePlanet.HybridTerraform
             if (planet == null || controlledCamera == null)
             {
                 FinishFlight(FinishReason.MissingReferencesDuringFlight, restoreCamera: true);
-                return;
-            }
-
-            if (Time.time >= _flightEndTime)
-            {
-                FinishFlight(FinishReason.DurationExpired, restoreCamera: true);
                 return;
             }
 
@@ -347,6 +388,11 @@ namespace LittlePlanet.HybridTerraform
             TerraformNearShip();
         }
 
+        private void LateUpdate()
+        {
+            UpdateCompletionHint();
+        }
+
         private Vector3 GetFlyTargetPosition(Tile tile)
         {
             var fallbackSurfacePosition = planet.GetTileWorldSurfaceCenter(tile);
@@ -356,6 +402,30 @@ namespace LittlePlanet.HybridTerraform
                 : fallbackSurfacePosition;
             var surfaceRadius = GetFlightSurfaceRadius(surfacePosition);
             return planet.transform.position + normal * (surfaceRadius + hoverAltitude);
+        }
+
+        private bool TryGetCameraCenterTile(out Tile tile)
+        {
+            tile = null;
+            if (planet == null || controlledCamera == null)
+            {
+                return false;
+            }
+
+            ResolvePlanetSurfaceCollider();
+            if (planetSurfaceCollider == null)
+            {
+                return false;
+            }
+
+            var ray = controlledCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+            if (!planetSurfaceCollider.Raycast(ray, out var hit, Mathf.Max(planet.Radius * 20f, 500f)))
+            {
+                return false;
+            }
+
+            tile = planet.FindNearestTile(hit.point);
+            return tile != null;
         }
 
         private void RotateCameraOrbitIfRequested()
@@ -501,6 +571,163 @@ namespace LittlePlanet.HybridTerraform
             _pendingCurrency -= wholeCurrency;
         }
 
+        private void UpdateCompletionHint()
+        {
+            if (!showCompletionHint || planet == null || Time.time < _nextCompletionHintUpdateTime)
+            {
+                return;
+            }
+
+            _nextCompletionHintUpdateTime = Time.time + completionHintUpdateInterval;
+            var terraformingPercent = planet.GetTerraformingPercent();
+            if (terraformingPercent < completionHintStartPercent || terraformingPercent >= 99.99f)
+            {
+                SetCompletionHintVisible(false);
+                return;
+            }
+
+            if (!TryFindNearestIncompleteTile(out var tile))
+            {
+                SetCompletionHintVisible(false);
+                return;
+            }
+
+            EnsureCompletionHintArrow();
+            if (completionHintArrow == null)
+            {
+                return;
+            }
+
+            var position = planet.GetTileWorldSurfaceCenter(tile, completionHintSurfaceOffset);
+            completionHintArrow.position = position;
+
+            var up = (position - planet.transform.position).normalized;
+            var forward = controlledCamera != null
+                ? position - controlledCamera.transform.position
+                : Vector3.ProjectOnPlane(Vector3.forward, up);
+            if (forward.sqrMagnitude <= 0.000001f)
+            {
+                forward = Vector3.ProjectOnPlane(Vector3.forward, up);
+            }
+
+            completionHintArrow.rotation = Quaternion.LookRotation(forward.normalized, up);
+            SetCompletionHintVisible(true);
+        }
+
+        private bool TryFindNearestIncompleteTile(out Tile bestTile)
+        {
+            bestTile = null;
+            if (planet == null || planet.Tiles == null || planet.Tiles.Count == 0)
+            {
+                return false;
+            }
+
+            var referencePosition = shipRoot != null && shipRoot.gameObject.activeInHierarchy
+                ? shipRoot.position
+                : controlledCamera != null
+                    ? controlledCamera.transform.position
+                    : planet.transform.position;
+
+            var bestDistanceSqr = float.PositiveInfinity;
+            var tiles = planet.Tiles;
+            for (var i = 0; i < tiles.Count; i++)
+            {
+                var tile = tiles[i];
+                if (tile == null || planet.IsHighlandTile(tile) || planet.GetTileTerraforming01(tile) >= incompleteTileThreshold)
+                {
+                    continue;
+                }
+
+                var tilePosition = planet.GetTileWorldSurfaceCenter(tile);
+                var distanceSqr = (tilePosition - referencePosition).sqrMagnitude;
+                if (distanceSqr >= bestDistanceSqr)
+                {
+                    continue;
+                }
+
+                bestDistanceSqr = distanceSqr;
+                bestTile = tile;
+            }
+
+            return bestTile != null;
+        }
+
+        private void EnsureCompletionHintArrow()
+        {
+            if (completionHintArrow != null)
+            {
+                return;
+            }
+
+            var arrowObject = new GameObject("TerraformCompletionHintArrow");
+            var meshFilter = arrowObject.AddComponent<MeshFilter>();
+            var meshRenderer = arrowObject.AddComponent<MeshRenderer>();
+            meshFilter.sharedMesh = CreateCompletionHintArrowMesh();
+            meshRenderer.sharedMaterial = CreateCompletionHintMaterial();
+            meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            meshRenderer.receiveShadows = false;
+            completionHintArrow = arrowObject.transform;
+            _ownsCompletionHintArrow = true;
+        }
+
+        private void SetCompletionHintVisible(bool isVisible)
+        {
+            if (completionHintArrow != null && completionHintArrow.gameObject.activeSelf != isVisible)
+            {
+                completionHintArrow.gameObject.SetActive(isVisible);
+            }
+        }
+
+        private Mesh CreateCompletionHintArrowMesh()
+        {
+            var mesh = new Mesh { name = "TerraformCompletionHintArrowMesh" };
+            mesh.vertices = new[]
+            {
+                new Vector3(0f, -0.55f, 0f),
+                new Vector3(-0.35f, -0.1f, 0f),
+                new Vector3(-0.13f, -0.1f, 0f),
+                new Vector3(-0.13f, 0.45f, 0f),
+                new Vector3(0.13f, 0.45f, 0f),
+                new Vector3(0.13f, -0.1f, 0f),
+                new Vector3(0.35f, -0.1f, 0f)
+            };
+            mesh.triangles = new[]
+            {
+                0, 1, 2,
+                0, 2, 5,
+                0, 5, 6,
+                2, 3, 4,
+                2, 4, 5
+            };
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        private Material CreateCompletionHintMaterial()
+        {
+            var shader = Shader.Find("Universal Render Pipeline/Unlit")
+                ?? Shader.Find("Unlit/Color")
+                ?? Shader.Find("Sprites/Default")
+                ?? Shader.Find("Standard");
+            if (shader == null)
+            {
+                return null;
+            }
+
+            var material = new Material(shader)
+            {
+                name = "TerraformCompletionHintArrowMaterial",
+                color = generatedHintColor
+            };
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", generatedHintColor);
+            }
+
+            return material;
+        }
+
         private void FinishFlight(FinishReason reason, bool restoreCamera)
         {
             LogSkill($"Finished. reason={reason}, restoreCamera={restoreCamera}");
@@ -513,7 +740,10 @@ namespace LittlePlanet.HybridTerraform
             RestoreShipState();
             RestoreOrbitControls();
             _approachTile = null;
-            _state = Time.time < _cooldownEndTime ? SkillState.Cooldown : SkillState.Ready;
+            _flightEndTime = 0f;
+            _cooldownEndTime = 0f;
+            _state = SkillState.Ready;
+            UpdateStatusText();
         }
 
         private void LogSkill(string message)
@@ -722,6 +952,16 @@ namespace LittlePlanet.HybridTerraform
             ResolvePlanetSurfaceCollider();
         }
 
+        private void HandleHotkey()
+        {
+            if (!enableHotkey || !InputCompat.WasKeyPressedThisFrame(activationHotkey))
+            {
+                return;
+            }
+
+            ToggleSkill();
+        }
+
         private void ResolvePlanetSurfaceCollider()
         {
             if (planetSurfaceCollider != null || planet == null)
@@ -818,7 +1058,8 @@ namespace LittlePlanet.HybridTerraform
             }
 
             activateButton.onClick.RemoveListener(ActivateSkill);
-            activateButton.onClick.AddListener(ActivateSkill);
+            activateButton.onClick.RemoveListener(ToggleSkill);
+            activateButton.onClick.AddListener(ToggleSkill);
         }
 
         private void UnbindButton()
@@ -829,6 +1070,7 @@ namespace LittlePlanet.HybridTerraform
             }
 
             activateButton.onClick.RemoveListener(ActivateSkill);
+            activateButton.onClick.RemoveListener(ToggleSkill);
         }
 
         private void SetOrbitCameraEnabled(bool enabled)
@@ -891,8 +1133,7 @@ namespace LittlePlanet.HybridTerraform
             }
 
             _nextButtonStateUpdateTime = Time.time + buttonStateUpdateInterval;
-            activateButton.interactable = _state == SkillState.Ready
-                                          && Time.time >= _cooldownEndTime;
+            activateButton.interactable = true;
         }
 
         private void UpdateStatusText()
@@ -904,11 +1145,10 @@ namespace LittlePlanet.HybridTerraform
 
             var nextText = _state switch
             {
-                SkillState.Aiming => "Select planet tile",
-                SkillState.Approaching => "Approaching",
-                SkillState.Flying => $"{Mathf.CeilToInt(Mathf.Max(0f, _flightEndTime - Time.time))} s",
-                SkillState.Cooldown => $"{Mathf.CeilToInt(Mathf.Max(0f, _cooldownEndTime - Time.time))} s",
-                _ => string.Empty
+                SkillState.Aiming => "Back",
+                SkillState.Approaching => "Back",
+                SkillState.Flying => "Back",
+                _ => "Fly"
             };
 
             if (string.Equals(_lastStatusText, nextText, System.StringComparison.Ordinal))

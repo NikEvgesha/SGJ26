@@ -32,6 +32,10 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
     [SerializeField] private bool startOpen;
     [SerializeField, Min(0.05f)] private float waterDestroyCheckInterval = 0.25f;
 
+    [Header("Hotkeys")]
+    [SerializeField] private bool enableNumberHotkeys = true;
+    [SerializeField] private bool openPanelOnNumberHotkey = true;
+
     private readonly List<BuildingUISlot> _slots = new();
     private readonly List<PlacedBuildingEntry> _placedBuildings = new();
     private readonly HashSet<int> _occupiedTileIndices = new();
@@ -87,6 +91,7 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
 
     private void Update()
     {
+        HandleNumberHotkeys();
         CheckPlacedBuildingsWaterContact();
 
         if (!_isOpen || _selectedBuilding == null)
@@ -134,6 +139,17 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
         {
             planet.ClickTintEnabled = false;
         }
+    }
+
+    public bool SelectBuildingByIndex(int index)
+    {
+        if (index < 0 || index >= _slots.Count || _slots[index] == null)
+        {
+            return false;
+        }
+
+        SelectBuilding(_slots[index]);
+        return true;
     }
 
     public void ShowTooltip(BuildingUISlot slot)
@@ -188,6 +204,43 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
         if (planet != null)
         {
             planet.ClickTintEnabled = true;
+        }
+    }
+
+    private void HandleNumberHotkeys()
+    {
+        if (!enableNumberHotkeys)
+        {
+            return;
+        }
+
+        for (var number = 1; number <= 8; number++)
+        {
+            if (!InputCompat.WasNumberKeyPressedThisFrame(number))
+            {
+                continue;
+            }
+
+            if (!_isOpen)
+            {
+                if (!openPanelOnNumberHotkey)
+                {
+                    return;
+                }
+
+                ResolveReferences();
+                if (windowManager != null)
+                {
+                    windowManager.OpenExclusive(this);
+                }
+                else
+                {
+                    SetWindowOpen(true);
+                }
+            }
+
+            SelectBuildingByIndex(number - 1);
+            return;
         }
     }
 

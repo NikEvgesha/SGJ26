@@ -137,6 +137,57 @@ namespace LittlePlanet.RuntimeInput
 #endif
         }
 
+        public static bool WasKeyPressedThisFrame(KeyCode keyCode)
+        {
+#if ENABLE_INPUT_SYSTEM
+            var keyboardKey = ToInputSystemKey(keyCode);
+            if (keyboardKey != Key.None && Keyboard.current != null && Keyboard.current[keyboardKey].wasPressedThisFrame)
+            {
+                return true;
+            }
+#endif
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+            if (Input.GetKeyDown(keyCode))
+            {
+                return true;
+            }
+#endif
+
+            return false;
+        }
+
+        public static bool WasNumberKeyPressedThisFrame(int number)
+        {
+            if (number < 0 || number > 9)
+            {
+                return false;
+            }
+
+#if ENABLE_INPUT_SYSTEM
+            if (Keyboard.current != null)
+            {
+                var digitKey = NumberToDigitKey(number);
+                var numpadKey = NumberToNumpadKey(number);
+                if (Keyboard.current[digitKey].wasPressedThisFrame || Keyboard.current[numpadKey].wasPressedThisFrame)
+                {
+                    return true;
+                }
+            }
+#endif
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+            var alphaKey = NumberToAlphaKey(number);
+            var keypadKey = NumberToKeypadKey(number);
+            if (Input.GetKeyDown(alphaKey) || Input.GetKeyDown(keypadKey))
+            {
+                return true;
+            }
+#endif
+
+            return false;
+        }
+
         private static Vector2 ClampToScreen(Vector2 position)
         {
             if (Screen.width <= 0 || Screen.height <= 0)
@@ -148,5 +199,99 @@ namespace LittlePlanet.RuntimeInput
             var y = Mathf.Clamp(position.y, 0f, Screen.height);
             return new Vector2(x, y);
         }
+
+#if ENABLE_INPUT_SYSTEM
+        private static Key NumberToDigitKey(int number)
+        {
+            return number switch
+            {
+                0 => Key.Digit0,
+                1 => Key.Digit1,
+                2 => Key.Digit2,
+                3 => Key.Digit3,
+                4 => Key.Digit4,
+                5 => Key.Digit5,
+                6 => Key.Digit6,
+                7 => Key.Digit7,
+                8 => Key.Digit8,
+                9 => Key.Digit9,
+                _ => Key.None
+            };
+        }
+
+        private static Key NumberToNumpadKey(int number)
+        {
+            return number switch
+            {
+                0 => Key.Numpad0,
+                1 => Key.Numpad1,
+                2 => Key.Numpad2,
+                3 => Key.Numpad3,
+                4 => Key.Numpad4,
+                5 => Key.Numpad5,
+                6 => Key.Numpad6,
+                7 => Key.Numpad7,
+                8 => Key.Numpad8,
+                9 => Key.Numpad9,
+                _ => Key.None
+            };
+        }
+
+        private static Key ToInputSystemKey(KeyCode keyCode)
+        {
+            return keyCode switch
+            {
+                KeyCode.F => Key.F,
+                KeyCode.Escape => Key.Escape,
+                KeyCode.Space => Key.Space,
+                KeyCode.Tab => Key.Tab,
+                KeyCode.LeftShift => Key.LeftShift,
+                KeyCode.RightShift => Key.RightShift,
+                KeyCode.LeftControl => Key.LeftCtrl,
+                KeyCode.RightControl => Key.RightCtrl,
+                KeyCode.LeftAlt => Key.LeftAlt,
+                KeyCode.RightAlt => Key.RightAlt,
+                _ => Key.None
+            };
+        }
+#endif
+
+#if ENABLE_LEGACY_INPUT_MANAGER
+        private static KeyCode NumberToAlphaKey(int number)
+        {
+            return number switch
+            {
+                0 => KeyCode.Alpha0,
+                1 => KeyCode.Alpha1,
+                2 => KeyCode.Alpha2,
+                3 => KeyCode.Alpha3,
+                4 => KeyCode.Alpha4,
+                5 => KeyCode.Alpha5,
+                6 => KeyCode.Alpha6,
+                7 => KeyCode.Alpha7,
+                8 => KeyCode.Alpha8,
+                9 => KeyCode.Alpha9,
+                _ => KeyCode.None
+            };
+        }
+
+        private static KeyCode NumberToKeypadKey(int number)
+        {
+            return number switch
+            {
+                0 => KeyCode.Keypad0,
+                1 => KeyCode.Keypad1,
+                2 => KeyCode.Keypad2,
+                3 => KeyCode.Keypad3,
+                4 => KeyCode.Keypad4,
+                5 => KeyCode.Keypad5,
+                6 => KeyCode.Keypad6,
+                7 => KeyCode.Keypad7,
+                8 => KeyCode.Keypad8,
+                9 => KeyCode.Keypad9,
+                _ => KeyCode.None
+            };
+        }
+#endif
     }
 }
