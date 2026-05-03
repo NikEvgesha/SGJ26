@@ -129,6 +129,7 @@ namespace LittlePlanet.HybridTerraform
         public int TerraformRadius => terraformRadius;
         public float TerraformPowerPerSecond => terraformPowerPerSecond;
         public float CurrencyPerCompletedTile => currencyPerCompletedTile;
+        public Button ActivateButton => activateButton;
         public event Action SkillActivated;
         public event Action FlightStarted;
         public event Action FlightEnded;

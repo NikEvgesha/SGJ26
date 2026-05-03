@@ -203,6 +203,11 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
         return _slots[index].transform as RectTransform;
     }
 
+    public RectTransform GetBuildButtonRect()
+    {
+        return buildButton != null ? buildButton.transform as RectTransform : null;
+    }
+
     public Tile FindNearestBuildableTileToCamera()
     {
         if (planet == null || interactionCamera == null || _selectedBuilding == null)

@@ -199,6 +199,11 @@ public class UpgradePanel : MonoBehaviour, IManagedWindow
         return null;
     }
 
+    public RectTransform GetCloseButtonRect()
+    {
+        return closeButton != null ? closeButton.transform as RectTransform : null;
+    }
+
     public int GetUpgradeLevel(UpgradeType upgradeType)
     {
         for (var i = 0; i < upgrades.Count; i++)

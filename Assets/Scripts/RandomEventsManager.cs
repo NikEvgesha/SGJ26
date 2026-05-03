@@ -77,6 +77,12 @@ public sealed class RandomEventsManager : MonoBehaviour
     private Tile _activeAreaCenter;
     private GameObject _activeVolcanoVisual;
     private Coroutine _goToAreaRoutine;
+    private RandomEventDefinition _forcedNextEvent;
+    private bool _isEventRunning;
+
+    public bool IsEventRunning => _isEventRunning;
+    public event Action<RandomEventDefinition> EventWarningStarted;
+    public event Action<RandomEventDefinition> EventResolved;
 
     private void Awake()
     {
@@ -129,6 +135,45 @@ public sealed class RandomEventsManager : MonoBehaviour
 
         StopCoroutine(_eventRoutine);
         _eventRoutine = null;
+        _isEventRunning = false;
+    }
+
+    public bool ForceNextEvent(EventType eventType)
+    {
+        for (var i = 0; i < events.Count; i++)
+        {
+            var candidate = events[i]?.eventDefinition;
+            if (candidate != null && candidate.EventType == eventType)
+            {
+                _forcedNextEvent = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public bool ForceNextEvent(RandomEventDefinition eventDefinition)
+    {
+        if (eventDefinition == null)
+        {
+            return false;
+        }
+
+        _forcedNextEvent = eventDefinition;
+        return true;
+    }
+
+    public RectTransform GetCautionRect()
+    {
+        EnsureCautionReferences();
+        return eventCaution != null ? eventCaution.transform as RectTransform : null;
+    }
+
+    public RectTransform GetGoToAreaButtonRect()
+    {
+        EnsureCautionReferences();
+        return goToAreaButton != null ? goToAreaButton.transform as RectTransform : null;
     }
 
     private IEnumerator EventLoop()
@@ -146,6 +191,7 @@ public sealed class RandomEventsManager : MonoBehaviour
 
     private IEnumerator RunEvent(RandomEventDefinition eventDefinition)
     {
+        _isEventRunning = true;
         ResolveReferences();
         _activeAreaCenter = null;
         _activeAreaTiles.Clear();
@@ -163,6 +209,7 @@ public sealed class RandomEventsManager : MonoBehaviour
 
         TrySpawnVolcanoVisual(eventDefinition);
         ShowCaution(eventDefinition);
+        EventWarningStarted?.Invoke(eventDefinition);
         var warningDuration = Mathf.Max(0f, eventDefinition.WarningDurationSeconds);
         if (warningDuration > 0f)
         {
@@ -190,6 +237,8 @@ public sealed class RandomEventsManager : MonoBehaviour
         ApplyEventImpact(eventDefinition);
         ClearAreaHighlight();
         HideCaution();
+        EventResolved?.Invoke(eventDefinition);
+        _isEventRunning = false;
     }
 
     private IEnumerator PlayMeteorVisual()
@@ -346,6 +395,13 @@ public sealed class RandomEventsManager : MonoBehaviour
 
     private RandomEventDefinition SelectRandomEvent()
     {
+        if (_forcedNextEvent != null)
+        {
+            var forcedEvent = _forcedNextEvent;
+            _forcedNextEvent = null;
+            return forcedEvent;
+        }
+
         var totalWeight = 0f;
         for (var i = 0; i < events.Count; i++)
         {

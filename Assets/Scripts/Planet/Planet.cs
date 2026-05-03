@@ -258,6 +258,8 @@ namespace LittlePlanet.PlanetSystem
         public float Radius => radius;
         public float CurrentWaterRadius => manageWater ? _currentWaterRadius : 0f;
         public CurrencyWallet Currency => _currencyWallet;
+        public float Humidity => _humidity;
+        public float Atmosphere => _atmosphere;
         public bool ClickTintEnabled { get; set; } = true;
         public bool IsConditionsInGreenZone => GetConditionsDistance01() <= greenConditionRadius;
 
@@ -851,6 +853,12 @@ namespace LittlePlanet.PlanetSystem
         public void AddAtmosphere(float delta)
         {
             SetAtmosphere(_atmosphere + delta);
+        }
+
+        public void SetTutorialStartConditions(float temperature, float atmosphere)
+        {
+            SetHumidity(temperature);
+            SetAtmosphere(atmosphere);
         }
 
         public float GetConditionsDistance01()
@@ -2598,6 +2606,28 @@ namespace LittlePlanet.PlanetSystem
             }
 
             return tintSum / terraformingTileCount * 100f;
+        }
+
+        public float GetOceanIndexPercent()
+        {
+            if (!manageWater)
+            {
+                return 0f;
+            }
+
+            var maxRadius = GetMaxWaterRadius();
+            if (maxRadius <= 0.0001f)
+            {
+                return 0f;
+            }
+
+            var minRadius = GetMinWaterRadiusForOceanIndex(maxRadius);
+            if (maxRadius - minRadius <= 0.0001f)
+            {
+                return _currentWaterRadius >= maxRadius ? 100f : 0f;
+            }
+
+            return Mathf.InverseLerp(minRadius, maxRadius, _currentWaterRadius) * 100f;
         }
 
         private bool TryRaycastTileAtPointer(Vector2 pointerPosition, out int tileIndex, out RaycastHit hit)
