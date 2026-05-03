@@ -26,6 +26,12 @@ public sealed class RandomEventsManager : MonoBehaviour
     [SerializeField] private CanvasGroup eventCaution;
     [SerializeField] private TMP_Text eventNameText;
     [SerializeField] private Button goToAreaButton;
+    [SerializeField] private GameObject effectsRoot;
+    [SerializeField] private GameObject temperatureEffectObject;
+    [SerializeField] private TMP_Text temperatureEffectSignText;
+    [SerializeField] private GameObject atmosphereEffectObject;
+    [SerializeField] private TMP_Text atmosphereEffectSignText;
+    [SerializeField] private GameObject demolishEffectObject;
     [SerializeField] private Material areaHighlightMaterial;
 
     [Header("Events")]
@@ -158,6 +164,7 @@ public sealed class RandomEventsManager : MonoBehaviour
             yield return PlayMeteorVisual();
         }
 
+        yield return PlayEventEndShake(eventDefinition);
         ApplyEventImpact(eventDefinition);
         ClearAreaHighlight();
         HideCaution();
@@ -165,12 +172,18 @@ public sealed class RandomEventsManager : MonoBehaviour
 
     private IEnumerator PlayMeteorVisual()
     {
-        if (planet == null || _activeAreaCenter == null)
+        if (planet == null)
         {
             yield break;
         }
 
-        var impactPosition = planet.GetTileWorldSurfaceCenter(_activeAreaCenter, meteorImpactSurfaceOffset);
+        var impactTile = GetAreaImpactTile();
+        if (impactTile == null)
+        {
+            yield break;
+        }
+
+        var impactPosition = planet.GetTileWorldSurfaceCenter(impactTile, meteorImpactSurfaceOffset);
         var up = (impactPosition - planet.transform.position).normalized;
         if (up.sqrMagnitude <= 0.000001f)
         {
@@ -263,6 +276,52 @@ public sealed class RandomEventsManager : MonoBehaviour
         }
     }
 
+    private Tile GetAreaImpactTile()
+    {
+        if (_activeAreaTiles == null || _activeAreaTiles.Count == 0)
+        {
+            return _activeAreaCenter;
+        }
+
+        var averageDirection = Vector3.zero;
+        for (var i = 0; i < _activeAreaTiles.Count; i++)
+        {
+            var tile = _activeAreaTiles[i];
+            if (tile == null)
+            {
+                continue;
+            }
+
+            averageDirection += tile.Center.normalized;
+        }
+
+        if (averageDirection.sqrMagnitude <= 0.000001f)
+        {
+            return _activeAreaCenter ?? _activeAreaTiles[0];
+        }
+
+        averageDirection.Normalize();
+        Tile bestTile = null;
+        var bestDot = float.NegativeInfinity;
+        for (var i = 0; i < _activeAreaTiles.Count; i++)
+        {
+            var tile = _activeAreaTiles[i];
+            if (tile == null)
+            {
+                continue;
+            }
+
+            var dot = Vector3.Dot(tile.Center.normalized, averageDirection);
+            if (dot > bestDot)
+            {
+                bestDot = dot;
+                bestTile = tile;
+            }
+        }
+
+        return bestTile ?? _activeAreaCenter;
+    }
+
     private RandomEventDefinition SelectRandomEvent()
     {
         var totalWeight = 0f;
@@ -341,7 +400,7 @@ public sealed class RandomEventsManager : MonoBehaviour
             return;
         }
 
-        flySkill?.CancelSkill();
+        flySkill?.CancelSkillAndStartCooldown();
         buildPanel?.CancelBuildMode();
         var safeDistance = Mathf.Max(focusCameraDistance, planet.Radius + focusSurfacePadding, planet.CurrentWaterRadius + focusSurfacePadding);
         cameraController?.FocusOnLocalDirection(_activeAreaCenter.Center, safeDistance, focusDurationSeconds);
@@ -356,6 +415,8 @@ public sealed class RandomEventsManager : MonoBehaviour
             eventNameText.text = eventDefinition.EventName;
         }
 
+        UpdateCautionEffects(eventDefinition);
+
         if (goToAreaButton != null)
         {
             goToAreaButton.gameObject.SetActive(showGoToArea);
@@ -369,13 +430,6 @@ public sealed class RandomEventsManager : MonoBehaviour
         }
 
         StartPulse();
-        if (eventDefinition.ShakeCamera && cameraController != null)
-        {
-            cameraController.ShakeCamera(
-                eventDefinition.CameraShakeDurationSeconds,
-                eventDefinition.CameraShakeStrength,
-                eventDefinition.CameraShakeFrequency);
-        }
     }
 
     private void HideCaution()
@@ -399,6 +453,90 @@ public sealed class RandomEventsManager : MonoBehaviour
         }
 
         StopPulse();
+    }
+
+    private void UpdateCautionEffects(RandomEventDefinition eventDefinition)
+    {
+        var hasTemperature = false;
+        var hasAtmosphere = false;
+        var temperatureValue = 0f;
+        var atmosphereValue = 0f;
+        var showDemolish = eventDefinition != null && eventDefinition.DestroyBuildingsInArea;
+
+        if (eventDefinition != null)
+        {
+            var temporaryEffects = eventDefinition.TemporaryEffects;
+            if (temporaryEffects != null)
+            {
+                for (var i = 0; i < temporaryEffects.Count; i++)
+                {
+                    var effect = temporaryEffects[i];
+                    switch (effect.type)
+                    {
+                        case TerraformingType.Temperature:
+                            hasTemperature = true;
+                            temperatureValue += effect.value;
+                            break;
+                        case TerraformingType.Atmosphere:
+                            hasAtmosphere = true;
+                            atmosphereValue += effect.value;
+                            break;
+                    }
+                }
+            }
+        }
+
+        if (temperatureEffectObject != null)
+        {
+            temperatureEffectObject.SetActive(hasTemperature);
+        }
+
+        if (temperatureEffectSignText != null)
+        {
+            temperatureEffectSignText.text = temperatureValue >= 0f ? "+" : "-";
+        }
+
+        if (atmosphereEffectObject != null)
+        {
+            atmosphereEffectObject.SetActive(hasAtmosphere);
+        }
+
+        if (atmosphereEffectSignText != null)
+        {
+            atmosphereEffectSignText.text = atmosphereValue >= 0f ? "+" : "-";
+        }
+
+        if (demolishEffectObject != null)
+        {
+            demolishEffectObject.SetActive(showDemolish);
+        }
+
+        if (effectsRoot != null)
+        {
+            effectsRoot.SetActive(hasTemperature || hasAtmosphere || showDemolish);
+        }
+    }
+
+    private IEnumerator PlayEventEndShake(RandomEventDefinition eventDefinition)
+    {
+        if (eventDefinition == null
+            || !eventDefinition.ShakeCamera
+            || cameraController == null
+            || (flySkill != null && flySkill.IsFlightModeActive))
+        {
+            yield break;
+        }
+
+        var shakeDuration = Mathf.Max(0f, eventDefinition.CameraShakeDurationSeconds);
+        cameraController.ShakeCamera(
+            shakeDuration,
+            eventDefinition.CameraShakeStrength,
+            eventDefinition.CameraShakeFrequency);
+
+        if (shakeDuration > 0f)
+        {
+            yield return new WaitForSeconds(shakeDuration);
+        }
     }
 
     private void StartPulse()
@@ -623,15 +761,60 @@ public sealed class RandomEventsManager : MonoBehaviour
             return;
         }
 
+        var preferredEventNameText = FindText(eventCaution.transform, "Name") ?? FindText(eventCaution.transform, "name");
+        if (preferredEventNameText != null
+            && (eventNameText == null || string.Equals(eventNameText.gameObject.name, "Title", StringComparison.Ordinal)))
+        {
+            eventNameText = preferredEventNameText;
+        }
+
         if (eventNameText == null)
         {
-            eventNameText = FindText(eventCaution.transform, "name") ?? eventCaution.GetComponentInChildren<TMP_Text>(true);
+            eventNameText = eventCaution.GetComponentInChildren<TMP_Text>(true);
         }
 
         if (goToAreaButton == null)
         {
             var buttonTransform = FindChildByName(eventCaution.transform, "GoToArea");
             goToAreaButton = buttonTransform != null ? buttonTransform.GetComponent<Button>() : null;
+        }
+
+        if (effectsRoot == null)
+        {
+            var effectsTransform = FindChildByName(eventCaution.transform, "Effects");
+            effectsRoot = effectsTransform != null ? effectsTransform.gameObject : null;
+        }
+
+        if (temperatureEffectObject == null)
+        {
+            var temperatureTransform = FindChildByName(eventCaution.transform, "Temperature");
+            temperatureEffectObject = temperatureTransform != null ? temperatureTransform.gameObject : null;
+        }
+
+        if (temperatureEffectSignText == null && temperatureEffectObject != null)
+        {
+            temperatureEffectSignText = temperatureEffectObject.GetComponentInChildren<TMP_Text>(true);
+        }
+
+        if (atmosphereEffectObject == null)
+        {
+            var atmosphereTransform =
+                FindChildByName(eventCaution.transform, "Atmosphere")
+                ?? FindChildByName(eventCaution.transform, "Atmosprhere")
+                ?? FindChildByName(eventCaution.transform, "Atmpsphere")
+                ?? FindChildByName(eventCaution.transform, "atmpsphere");
+            atmosphereEffectObject = atmosphereTransform != null ? atmosphereTransform.gameObject : null;
+        }
+
+        if (atmosphereEffectSignText == null && atmosphereEffectObject != null)
+        {
+            atmosphereEffectSignText = atmosphereEffectObject.GetComponentInChildren<TMP_Text>(true);
+        }
+
+        if (demolishEffectObject == null)
+        {
+            var demolishTransform = FindChildByName(eventCaution.transform, "Demolish");
+            demolishEffectObject = demolishTransform != null ? demolishTransform.gameObject : null;
         }
     }
 

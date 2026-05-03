@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using LittlePlanet.RuntimeInput;
 
 namespace LittlePlanet.UI
 {
@@ -7,7 +8,7 @@ namespace LittlePlanet.UI
     {
         [Header("References")]
         [SerializeField] private Button settingsButton;
-        [SerializeField] private string settingsButtonObjectName = "Settings";
+        [SerializeField] private string settingsButtonObjectName = "SettingsButton";
         [SerializeField] private CanvasGroup canvasGroup;
         [SerializeField] private WindowManager windowManager;
 
@@ -35,6 +36,14 @@ namespace LittlePlanet.UI
         {
             UnbindButton();
             windowManager?.Unregister(this);
+        }
+
+        private void Update()
+        {
+            if (InputCompat.WasKeyPressedThisFrame(KeyCode.Tab))
+            {
+                Toggle();
+            }
         }
 
         public void Toggle()
@@ -72,6 +81,15 @@ namespace LittlePlanet.UI
                 if (buttonObject != null)
                 {
                     settingsButton = buttonObject.GetComponent<Button>();
+                }
+            }
+
+            if (settingsButton == null)
+            {
+                var fallbackButtonObject = GameObject.Find("Settings");
+                if (fallbackButtonObject != null)
+                {
+                    settingsButton = fallbackButtonObject.GetComponent<Button>();
                 }
             }
         }

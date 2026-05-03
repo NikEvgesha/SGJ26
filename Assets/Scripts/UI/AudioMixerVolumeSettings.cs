@@ -19,6 +19,9 @@ namespace LittlePlanet.UI
         [SerializeField] private Slider masterVolumeSlider;
         [SerializeField] private Slider musicVolumeSlider;
         [SerializeField] private Slider sfxVolumeSlider;
+        [SerializeField] private string masterSliderObjectName = "MasterSlider";
+        [SerializeField] private string musicSliderObjectName = "MusicSlider";
+        [SerializeField] private string soundSliderObjectName = "SoundSlider";
 
         [Header("Defaults")]
         [SerializeField, Range(0f, 1f)] private float defaultMasterVolume = 1f;
@@ -32,11 +35,13 @@ namespace LittlePlanet.UI
 
         private void Awake()
         {
+            ResolveReferences();
             LoadAndApply();
         }
 
         private void OnEnable()
         {
+            ResolveReferences();
             BindSliders();
             SyncSlidersFromSettings();
         }
@@ -109,6 +114,29 @@ namespace LittlePlanet.UI
             audioMixer.SetFloat(parameterName, NormalizedToDecibels(normalizedValue));
         }
 
+        private void ResolveReferences()
+        {
+            if (masterVolumeSlider == null)
+            {
+                masterVolumeSlider = FindSliderByName(masterSliderObjectName);
+            }
+
+            if (musicVolumeSlider == null)
+            {
+                musicVolumeSlider = FindSliderByName(musicSliderObjectName);
+            }
+
+            if (sfxVolumeSlider == null)
+            {
+                sfxVolumeSlider = FindSliderByName(soundSliderObjectName);
+            }
+
+            if (sfxVolumeSlider == null)
+            {
+                sfxVolumeSlider = FindSliderByName("SfxSlider");
+            }
+        }
+
         private void BindSliders()
         {
             BindSlider(masterVolumeSlider, SetMasterVolume);
@@ -155,6 +183,17 @@ namespace LittlePlanet.UI
             {
                 slider.SetValueWithoutNotify(Mathf.Clamp01(value));
             }
+        }
+
+        private static Slider FindSliderByName(string objectName)
+        {
+            if (string.IsNullOrWhiteSpace(objectName))
+            {
+                return null;
+            }
+
+            var sliderObject = GameObject.Find(objectName);
+            return sliderObject != null ? sliderObject.GetComponent<Slider>() : null;
         }
 
         private static float NormalizedToDecibels(float normalizedValue)

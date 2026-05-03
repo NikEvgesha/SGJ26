@@ -2308,7 +2308,7 @@ namespace LittlePlanet.PlanetSystem
                 return;
             }
 
-            currencyText.text = $"$ {amount}";
+            currencyText.text = amount.ToString();
         }
 
         private void UpdateOceanIndexUi()

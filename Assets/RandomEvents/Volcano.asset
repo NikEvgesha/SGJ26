@@ -24,13 +24,13 @@ MonoBehaviour:
   hasArea: 1
   areaMustStartOnHighland: 1
   areaRadius: 12
-  warningDurationSeconds: 4
+  warningDurationSeconds: 20
   warningColor: {r: 1, g: 0.3071773, b: 0.019607842, a: 0.78}
   highlightSurfaceOffset: 0.06
   destroyBuildingsInArea: 1
   resetTerraformingInArea: 1
   terraformingAfterImpact: 0
   shakeCamera: 1
-  cameraShakeDurationSeconds: 8.29
+  cameraShakeDurationSeconds: 5
   cameraShakeStrength: 0.78
   cameraShakeFrequency: 4.75

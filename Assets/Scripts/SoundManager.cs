@@ -1,8 +1,14 @@
 using UnityEngine;
+using UnityEngine.UI;
 using LittlePlanet.HybridTerraform;
+using LittlePlanet.RuntimeInput;
+using LittlePlanet.UI;
 
 public class SoundManager : MonoBehaviour
 {
+    private const string MusicVolumePrefsKey = "SoundManager.MusicVolume";
+    private const string SfxVolumePrefsKey = "SoundManager.SfxVolume";
+
     [Header("Clips")]
     [SerializeField] private AudioClip musicClip;
     [SerializeField] private AudioClip shipNoiseClip;
@@ -18,15 +24,47 @@ public class SoundManager : MonoBehaviour
     [Header("Volume")]
     [SerializeField, Range(0f, 1f)] private float musicVolume = 0.6f;
     [SerializeField, Range(0f, 1f)] private float shipNoiseVolume = 0.75f;
+    [SerializeField] private bool saveVolumeToPlayerPrefs = true;
     [SerializeField] private bool logAudioWarnings;
+
+    [Header("Settings UI")]
+    [SerializeField] private string settingsPanelObjectName = "Settings";
+    [SerializeField] private string settingsButtonObjectName = "SettingsButton";
+    [SerializeField] private string musicSliderObjectName = "MusicSlider";
+    [SerializeField] private string soundSliderObjectName = "SoundSlider";
 
     private bool _isShipNoiseActive;
     private float _nextFlightStateCheckTime;
+    private bool _isSettingsOpen;
+    private bool _isUiBound;
+
+    private GameObject _settingsPanelObject;
+    private CanvasGroup _settingsCanvasGroup;
+    private Button _settingsButton;
+    private Slider _musicSlider;
+    private Slider _soundSlider;
+    private SettingsPanel _settingsPanelController;
 
     private void Awake()
     {
         ResolveReferences(createMissingSources: true);
+        LoadVolumes();
         ConfigureSources();
+
+        ResolveUiReferences();
+        CacheSettingsState();
+    }
+
+    private void OnEnable()
+    {
+        ResolveUiReferences();
+        BindUi();
+        SyncSlidersFromState();
+    }
+
+    private void OnDisable()
+    {
+        UnbindUi();
     }
 
     private void Start()
@@ -37,6 +75,8 @@ public class SoundManager : MonoBehaviour
 
     private void Update()
     {
+        HandleSettingsToggleInput();
+
         if (Time.unscaledTime < _nextFlightStateCheckTime)
         {
             return;
@@ -49,6 +89,33 @@ public class SoundManager : MonoBehaviour
     private void OnValidate()
     {
         flightStateCheckInterval = Mathf.Max(0.05f, flightStateCheckInterval);
+    }
+
+    public void SetMusicVolume(float value)
+    {
+        musicVolume = Mathf.Clamp01(value);
+        if (musicSource != null)
+        {
+            musicSource.volume = musicVolume;
+        }
+
+        SaveVolumes();
+    }
+
+    public void SetSoundVolume(float value)
+    {
+        shipNoiseVolume = Mathf.Clamp01(value);
+        if (shipNoiseSource != null)
+        {
+            shipNoiseSource.volume = shipNoiseVolume;
+        }
+
+        SaveVolumes();
+    }
+
+    public void SetSfxVolume(float value)
+    {
+        SetSoundVolume(value);
     }
 
     [ContextMenu("Setup Sound Sources")]
@@ -89,6 +156,196 @@ public class SoundManager : MonoBehaviour
     {
         ConfigureSource(musicSource, musicClip, musicVolume, playOnAwake: true);
         ConfigureSource(shipNoiseSource, shipNoiseClip, shipNoiseVolume, playOnAwake: false);
+    }
+
+    private void HandleSettingsToggleInput()
+    {
+        if (_settingsPanelController != null)
+        {
+            return;
+        }
+
+        if (InputCompat.WasKeyPressedThisFrame(KeyCode.Tab))
+        {
+            ToggleSettingsPanel();
+        }
+    }
+
+    private void ToggleSettingsPanel()
+    {
+        ResolveUiReferences();
+        if (_settingsPanelController != null)
+        {
+            _settingsPanelController.Toggle();
+            return;
+        }
+
+        SetSettingsOpen(!_isSettingsOpen);
+    }
+
+    private void SetSettingsOpen(bool isOpen)
+    {
+        _isSettingsOpen = isOpen;
+
+        if (_settingsPanelObject == null)
+        {
+            return;
+        }
+
+        if (_settingsCanvasGroup == null)
+        {
+            _settingsCanvasGroup = _settingsPanelObject.GetComponent<CanvasGroup>();
+        }
+
+        if (_settingsCanvasGroup == null)
+        {
+            _settingsPanelObject.SetActive(isOpen);
+            return;
+        }
+
+        if (!_settingsPanelObject.activeSelf)
+        {
+            _settingsPanelObject.SetActive(true);
+        }
+
+        _settingsCanvasGroup.alpha = isOpen ? 1f : 0f;
+        _settingsCanvasGroup.interactable = isOpen;
+        _settingsCanvasGroup.blocksRaycasts = isOpen;
+    }
+
+    private void ResolveUiReferences()
+    {
+        _settingsPanelObject ??= FindObjectByName(settingsPanelObjectName);
+        _settingsButton ??= FindComponentByName<Button>(settingsButtonObjectName);
+        _musicSlider ??= FindComponentByName<Slider>(musicSliderObjectName);
+        _soundSlider ??= FindComponentByName<Slider>(soundSliderObjectName);
+        if (_settingsPanelObject != null && _settingsPanelController == null)
+        {
+            _settingsPanelController = _settingsPanelObject.GetComponent<SettingsPanel>();
+        }
+
+        if (_settingsPanelObject != null && _settingsCanvasGroup == null)
+        {
+            _settingsCanvasGroup = _settingsPanelObject.GetComponent<CanvasGroup>();
+            if (_settingsCanvasGroup == null)
+            {
+                _settingsCanvasGroup = _settingsPanelObject.AddComponent<CanvasGroup>();
+            }
+        }
+    }
+
+    private void CacheSettingsState()
+    {
+        if (_settingsPanelObject == null)
+        {
+            _isSettingsOpen = false;
+            return;
+        }
+
+        if (_settingsCanvasGroup == null)
+        {
+            _isSettingsOpen = _settingsPanelObject.activeSelf;
+            return;
+        }
+
+        _isSettingsOpen = _settingsCanvasGroup.alpha > 0.5f && _settingsCanvasGroup.interactable;
+    }
+
+    private void BindUi()
+    {
+        if (_isUiBound)
+        {
+            return;
+        }
+
+        if (_settingsButton != null)
+        {
+            _settingsButton.onClick.RemoveListener(ToggleSettingsPanel);
+            if (_settingsPanelController == null)
+            {
+                _settingsButton.onClick.AddListener(ToggleSettingsPanel);
+            }
+        }
+
+        if (_musicSlider != null)
+        {
+            _musicSlider.onValueChanged.RemoveListener(SetMusicVolume);
+            _musicSlider.onValueChanged.AddListener(SetMusicVolume);
+        }
+
+        if (_soundSlider != null)
+        {
+            _soundSlider.onValueChanged.RemoveListener(SetSoundVolume);
+            _soundSlider.onValueChanged.AddListener(SetSoundVolume);
+        }
+
+        _isUiBound = true;
+    }
+
+    private void UnbindUi()
+    {
+        if (_settingsButton != null)
+        {
+            _settingsButton.onClick.RemoveListener(ToggleSettingsPanel);
+        }
+
+        if (_musicSlider != null)
+        {
+            _musicSlider.onValueChanged.RemoveListener(SetMusicVolume);
+        }
+
+        if (_soundSlider != null)
+        {
+            _soundSlider.onValueChanged.RemoveListener(SetSoundVolume);
+        }
+
+        _isUiBound = false;
+    }
+
+    private void SyncSlidersFromState()
+    {
+        if (_musicSlider != null)
+        {
+            _musicSlider.SetValueWithoutNotify(musicVolume);
+        }
+
+        if (_soundSlider != null)
+        {
+            _soundSlider.SetValueWithoutNotify(shipNoiseVolume);
+        }
+    }
+
+    private void LoadVolumes()
+    {
+        if (!saveVolumeToPlayerPrefs)
+        {
+            return;
+        }
+
+        musicVolume = PlayerPrefs.GetFloat(MusicVolumePrefsKey, musicVolume);
+        shipNoiseVolume = PlayerPrefs.GetFloat(SfxVolumePrefsKey, shipNoiseVolume);
+    }
+
+    private void SaveVolumes()
+    {
+        if (!saveVolumeToPlayerPrefs)
+        {
+            return;
+        }
+
+        PlayerPrefs.SetFloat(MusicVolumePrefsKey, musicVolume);
+        PlayerPrefs.SetFloat(SfxVolumePrefsKey, shipNoiseVolume);
+    }
+
+    private static GameObject FindObjectByName(string objectName)
+    {
+        return string.IsNullOrWhiteSpace(objectName) ? null : GameObject.Find(objectName);
+    }
+
+    private static T FindComponentByName<T>(string objectName) where T : Component
+    {
+        var target = FindObjectByName(objectName);
+        return target != null ? target.GetComponent<T>() : null;
     }
 
     private static void ConfigureSource(AudioSource source, AudioClip clip, float volume, bool playOnAwake)

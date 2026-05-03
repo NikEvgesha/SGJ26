@@ -286,6 +286,19 @@ namespace LittlePlanet.HybridTerraform
             }
         }
 
+        public void CancelSkillAndStartCooldown()
+        {
+            if (_state == SkillState.Approaching || _state == SkillState.Flying)
+            {
+                _flightEndTime = Time.time;
+                _cooldownEndTime = Time.time + cooldownDuration;
+                FinishFlight(FinishReason.Cancelled, restoreCamera: true);
+                return;
+            }
+
+            CancelSkill();
+        }
+
         private void HandlePlanetTileClicked(Tile tile)
         {
             if (_state != SkillState.Aiming || tile == null || planet == null || controlledCamera == null)
