@@ -3,7 +3,6 @@ using System.Collections;
 using LittlePlanet.HybridTerraform;
 using LittlePlanet.PlanetSystem;
 using LittlePlanet.UI;
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -28,6 +27,9 @@ public sealed class TutorialManager : MonoBehaviour
     [SerializeField] private bool enableTutorial = true;
     [SerializeField] private bool hideObjectivePanelOnComplete = true;
     [SerializeField, Min(0f)] private float finalMessageDurationSeconds = 8f;
+    [SerializeField] private TutorialObjectivePanel objectivePanelPrefab;
+    [SerializeField] private Sprite arrowSprite;
+    [SerializeField] private string objectivePanelResourcePath = "TutorialObjectivePanel";
 
     [Header("Targets")]
     [SerializeField, Min(0)] private int starterScienceTarget = 10;
@@ -76,9 +78,9 @@ public sealed class TutorialManager : MonoBehaviour
     private TutorialObjectivePanel _objectivePanel;
 
     private RectTransform _primaryArrow;
-    private TMP_Text _primaryArrowText;
+    private Image _primaryArrowImage;
     private RectTransform _secondaryArrow;
-    private TMP_Text _secondaryArrowText;
+    private Image _secondaryArrowImage;
     private RectTransform _primaryUiTarget;
     private RectTransform _secondaryUiTarget;
     private Func<Vector3?> _primaryWorldTarget;
@@ -97,6 +99,13 @@ public sealed class TutorialManager : MonoBehaviour
     {
         if (FindFirstObjectByType<TutorialManager>(FindObjectsInactive.Include) != null)
         {
+            return;
+        }
+
+        var prefab = Resources.Load<TutorialManager>("TutorialManager");
+        if (prefab != null)
+        {
+            Instantiate(prefab).name = nameof(TutorialManager);
             return;
         }
 
@@ -309,7 +318,12 @@ public sealed class TutorialManager : MonoBehaviour
     {
         if (_objectivePanel == null && _uiRoot != null)
         {
-            _objectivePanel = TutorialObjectivePanel.CreateOrFind(_uiRoot.transform);
+            if (objectivePanelPrefab == null && !string.IsNullOrWhiteSpace(objectivePanelResourcePath))
+            {
+                objectivePanelPrefab = Resources.Load<TutorialObjectivePanel>(objectivePanelResourcePath);
+            }
+
+            _objectivePanel = TutorialObjectivePanel.CreateOrFind(_uiRoot.transform, objectivePanelPrefab);
         }
 
         if (uiCanvas == null)
@@ -319,48 +333,47 @@ public sealed class TutorialManager : MonoBehaviour
 
         if (_primaryArrow == null)
         {
-            (_primaryArrow, _primaryArrowText) = CreateArrow("TutorialArrowPrimary");
+            (_primaryArrow, _primaryArrowImage) = CreateArrow("TutorialArrowPrimary");
         }
 
         if (_secondaryArrow == null)
         {
-            (_secondaryArrow, _secondaryArrowText) = CreateArrow("TutorialArrowSecondary");
+            (_secondaryArrow, _secondaryArrowImage) = CreateArrow("TutorialArrowSecondary");
         }
 
         HideArrows();
     }
 
-    private (RectTransform, TMP_Text) CreateArrow(string arrowName)
+    private (RectTransform, Image) CreateArrow(string arrowName)
     {
-        var root = new GameObject(arrowName, typeof(RectTransform));
+        EnsureArrowSprite();
+
+        var root = new GameObject(arrowName, typeof(RectTransform), typeof(Image));
         var rect = root.GetComponent<RectTransform>();
         rect.SetParent(uiCanvas.transform, false);
         rect.anchorMin = new Vector2(0.5f, 0.5f);
         rect.anchorMax = new Vector2(0.5f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
-        rect.sizeDelta = new Vector2(40f, 40f);
+        rect.sizeDelta = new Vector2(72f, 72f);
 
-        var textObject = new GameObject("Label", typeof(RectTransform), typeof(TextMeshProUGUI));
-        var textRect = textObject.GetComponent<RectTransform>();
-        textRect.SetParent(rect, false);
-        textRect.anchorMin = Vector2.zero;
-        textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = Vector2.zero;
-        textRect.offsetMax = Vector2.zero;
-
-        var text = textObject.GetComponent<TextMeshProUGUI>();
-        text.text = "v";
-        text.alignment = TextAlignmentOptions.Center;
-        text.color = new Color(1f, 0.93f, 0.3f, 1f);
-        text.fontSize = 40f;
-        var anyText = FindFirstObjectByType<TextMeshProUGUI>(FindObjectsInactive.Include);
-        if (anyText != null && anyText.font != null)
-        {
-            text.font = anyText.font;
-        }
+        var image = root.GetComponent<Image>();
+        image.sprite = arrowSprite;
+        image.color = new Color(1f, 0.93f, 0.3f, 1f);
+        image.raycastTarget = false;
+        image.preserveAspect = true;
 
         rect.gameObject.SetActive(false);
-        return (rect, text);
+        return (rect, image);
+    }
+
+    private void EnsureArrowSprite()
+    {
+        if (arrowSprite != null)
+        {
+            return;
+        }
+
+        arrowSprite = Resources.Load<Sprite>("arrow_simple");
     }
 
     private void PrepareInitialUiState()
@@ -394,14 +407,14 @@ public sealed class TutorialManager : MonoBehaviour
                 upgradePanel?.SetTutorialAllowedUpgrade(null);
                 buildPanel?.SetHotkeysEnabled(false, false);
                 buildPanel?.ClearTutorialRestrictions();
-                _objectivePanel?.SetObjective("The planet is in metamorphosis. Green the surface to earn science points.\nPress [F] or Fly to start flight.");
+                _objectivePanel?.SetObjective("Планета переживает метаморфозу: сухая поверхность может стать живой экосистемой. Озеленяй землю и получай очки науки. Нажми [F] или кнопку Fly, чтобы начать полет к поверхности.");
                 break;
             case TutorialStep.CollectTenScience:
                 SetMainUiVisibility(showCurrency: true, showUpgradeButton: false, showBuildButton: false, showTerraforming: false);
                 flySkill?.SetTutorialHotkeyAllowed(true);
                 upgradePanel?.SetHotkeyEnabled(false);
                 buildPanel?.SetHotkeysEnabled(false, false);
-                _objectivePanel?.SetObjective("Fly near the surface and collect 10 science points for the first upgrade.");
+                _objectivePanel?.SetObjective("Лети рядом с поверхностью, чтобы озеленять землю. Набери 10 очков науки для первого улучшения корабля.");
                 break;
             case TutorialStep.BuyFirstUpgrade:
                 SetMainUiVisibility(showCurrency: true, showUpgradeButton: true, showBuildButton: false, showTerraforming: false);
@@ -409,7 +422,7 @@ public sealed class TutorialManager : MonoBehaviour
                 upgradePanel?.SetTutorialAllowedUpgrade(requiredUpgradeType);
                 upgradePanel?.SetTutorialTrainingPriceEnabled(true);
                 buildPanel?.SetHotkeysEnabled(false, false);
-                _objectivePanel?.SetObjective("Open upgrades with [U] and buy Greening Power.");
+                _objectivePanel?.SetObjective("Очков науки достаточно. Улучши силу озеленения: корабль будет быстрее менять поверхность и приносить больше науки. Открой улучшения на [U].");
                 break;
             case TutorialStep.CloseUpgradeAndCollectHundred:
                 SetMainUiVisibility(showCurrency: true, showUpgradeButton: true, showBuildButton: false, showTerraforming: false);
@@ -418,7 +431,7 @@ public sealed class TutorialManager : MonoBehaviour
                 upgradePanel?.SetTutorialTrainingPriceEnabled(false);
                 buildPanel?.SetHotkeysEnabled(false, false);
                 _scienceCheckpointAmount = planet != null ? planet.Currency.Amount : 0;
-                _objectivePanel?.SetObjective("Great. Close the upgrade window and collect 100 more science points.");
+                _objectivePanel?.SetObjective("Отлично. Закрой окно улучшений и набери еще 100 очков науки.");
                 break;
             case TutorialStep.OpenBuildAndSelectAirGenerator:
                 SetMainUiVisibility(showCurrency: true, showUpgradeButton: true, showBuildButton: true, showTerraforming: false);
@@ -426,20 +439,20 @@ public sealed class TutorialManager : MonoBehaviour
                 buildPanel?.SetHotkeysEnabled(true, true);
                 buildPanel?.SetTutorialAllowedBuildingIndex(airGeneratorSlotIndex);
                 buildPanel?.SetTutorialAllowedNumberHotkey(airGeneratorHotkeyNumber);
-                _objectivePanel?.SetObjective("Open building menu with [B] and select Air Generator with [4].");
+                _objectivePanel?.SetObjective("Теперь можно строить здания. Открой постройки на [B], затем выбери генератор воздуха кнопкой [4].");
                 break;
             case TutorialStep.PlaceAirGenerator:
                 SetMainUiVisibility(showCurrency: true, showUpgradeButton: true, showBuildButton: true, showTerraforming: false);
                 buildPanel?.SetHotkeysEnabled(true, true);
                 buildPanel?.SetTutorialAllowedBuildingIndex(airGeneratorSlotIndex);
                 buildPanel?.SetTutorialAllowedNumberHotkey(airGeneratorHotkeyNumber);
-                _objectivePanel?.SetObjective("Place the selected Air Generator on a free non-mountain tile.");
+                _objectivePanel?.SetObjective("Построй генератор воздуха на свободном участке без гор. Помни: в низинах позже появится вода, и она может разрушить постройку.");
                 break;
             case TutorialStep.ReachWaterFivePercent:
                 SetMainUiVisibility(showCurrency: true, showUpgradeButton: true, showBuildButton: true, showTerraforming: true);
                 buildPanel?.SetHotkeysEnabled(true, true);
                 buildPanel?.ClearTutorialRestrictions();
-                _objectivePanel?.SetObjective("Watch terraforming index and reach 5% water level.");
+                _objectivePanel?.SetObjective("Теперь следи за индексом терраформирования. Когда он достигнет синей зоны, уровень воды начнет расти. Доведи воду до 5%.");
                 break;
             case TutorialStep.WaitForFirstVolcanoEvent:
                 SetMainUiVisibility(showCurrency: true, showUpgradeButton: true, showBuildButton: true, showTerraforming: true);
@@ -453,15 +466,15 @@ public sealed class TutorialManager : MonoBehaviour
                 }
 
                 randomEventsManager?.StartEvents();
-                _objectivePanel?.SetObjective("Nice. Water helps greening. Next goal is 100%, but first get ready for the first cataclysm.");
+                _objectivePanel?.SetObjective("Отлично. Вода начала прибывать и помогает распространять жизнь по планете. Теперь доведи планету до 100%. С этого момента могут происходить катаклизмы.");
                 break;
             case TutorialStep.ExplainCataclysmUi:
                 SetMainUiVisibility(showCurrency: true, showUpgradeButton: true, showBuildButton: true, showTerraforming: true);
-                _objectivePanel?.SetObjective("Cataclysms can destroy buildings and change temperature/atmosphere.\nCheck event icons and use GoToArea when needed.");
+                _objectivePanel?.SetObjective("О нет, вулкан пришел в движение. Катаклизмы могут разрушать здания и менять температуру или атмосферу. Что именно произойдет, показывают иконки события. Нажми GoToArea, чтобы перейти к зоне события.");
                 break;
             case TutorialStep.Final:
                 SetMainUiVisibility(showCurrency: true, showUpgradeButton: true, showBuildButton: true, showTerraforming: true);
-                _objectivePanel?.SetObjective("You now know the basics. Final goal: fill the planet with greenery and water to 100%.");
+                _objectivePanel?.SetObjective("Теперь ты знаешь основы. Последняя цель - заполнить планету зеленью и водой на 100%. Удачи в терраформировании.");
                 _finalStepEndTime = Time.unscaledTime + Mathf.Max(0f, finalMessageDurationSeconds);
                 break;
         }
@@ -880,6 +893,7 @@ public sealed class TutorialManager : MonoBehaviour
                 out var localPoint))
         {
             arrow.anchoredPosition = localPoint + offset;
+            arrow.localRotation = Quaternion.Euler(0f, 0f, offset.y >= 0f ? 180f : 0f);
             if (!arrow.gameObject.activeSelf)
             {
                 arrow.gameObject.SetActive(true);

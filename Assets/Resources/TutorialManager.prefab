@@ -1,0 +1,75 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &200000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 200001}
+  - component: {fileID: 200002}
+  m_Layer: 0
+  m_Name: TutorialManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &200001
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200000}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &200002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 200000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff0c07fc75fe4b14839faf231172bd03, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TutorialManager
+  enableTutorial: 1
+  hideObjectivePanelOnComplete: 1
+  finalMessageDurationSeconds: 8
+  objectivePanelPrefab: {fileID: 100003, guid: 6b4bd1282e7f46a590d60df377e3d7ee, type: 3}
+  arrowSprite: {fileID: 21300000, guid: 94be1a6a704fc27458a45378dafba3a2, type: 3}
+  objectivePanelResourcePath: TutorialObjectivePanel
+  starterScienceTarget: 10
+  postUpgradeScienceTarget: 100
+  tutorialStartTemperature: 50
+  tutorialStartAtmosphere: 0
+  targetWaterPercent: 5
+  airGeneratorHotkeyNumber: 4
+  airGeneratorSlotIndex: 3
+  requiredUpgradeType: 0
+  firstForcedEventType: 1
+  planet: {fileID: 0}
+  flySkill: {fileID: 0}
+  upgradePanel: {fileID: 0}
+  buildPanel: {fileID: 0}
+  randomEventsManager: {fileID: 0}
+  windowManager: {fileID: 0}
+  settingsPanel: {fileID: 0}
+  soundManager: {fileID: 0}
+  uiCanvas: {fileID: 0}
+  uiRootObjectName: UI
+  currencyObjectName: Currency
+  upgradeButtonObjectName: Upgrade
+  buildButtonObjectName: BuildButton
+  terraformingIndexObjectName: TerraformingIndex

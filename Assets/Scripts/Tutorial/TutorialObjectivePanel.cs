@@ -14,7 +14,7 @@ public sealed class TutorialObjectivePanel : MonoBehaviour
     private bool _isBuilding;
     private bool _isBuilt;
 
-    public static TutorialObjectivePanel CreateOrFind(Transform uiRoot)
+    public static TutorialObjectivePanel CreateOrFind(Transform uiRoot, TutorialObjectivePanel prefab = null)
     {
         var existing = FindFirstObjectByType<TutorialObjectivePanel>(FindObjectsInactive.Include);
         if (existing != null)
@@ -28,8 +28,17 @@ public sealed class TutorialObjectivePanel : MonoBehaviour
             return null;
         }
 
+        TutorialObjectivePanel panel;
+        if (prefab != null)
+        {
+            panel = Instantiate(prefab, uiRoot, false);
+            panel.name = prefab.name;
+            panel.EnsureBuilt();
+            return panel;
+        }
+
         var root = new GameObject("TutorialObjectivePanel", typeof(RectTransform), typeof(Image), typeof(CanvasGroup), typeof(TutorialObjectivePanel));
-        var panel = root.GetComponent<TutorialObjectivePanel>();
+        panel = root.GetComponent<TutorialObjectivePanel>();
         var rect = root.GetComponent<RectTransform>();
         rect.SetParent(uiRoot, false);
         rect.anchorMin = new Vector2(0f, 1f);
