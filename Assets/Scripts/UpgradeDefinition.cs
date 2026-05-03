@@ -26,4 +26,12 @@ public class UpgradeDefinition : ScriptableObject
         var clampedLevel = Mathf.Clamp(currentLevel, 0, maxLevel);
         return Mathf.Max(0, Mathf.RoundToInt(baseCost * Mathf.Pow(costMultiplier, clampedLevel)));
     }
+
+    public void ApplyBalance(int nextBaseCost, float nextCostMultiplier, int nextMaxLevel, float nextValuePerLevel)
+    {
+        baseCost = Mathf.Max(0, nextBaseCost);
+        costMultiplier = Mathf.Max(1f, nextCostMultiplier);
+        maxLevel = Mathf.Max(1, nextMaxLevel);
+        valuePerLevel = nextValuePerLevel;
+    }
 }

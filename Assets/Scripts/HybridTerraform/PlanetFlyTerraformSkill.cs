@@ -74,6 +74,7 @@ namespace LittlePlanet.HybridTerraform
         [SerializeField, Min(0f)] private float cameraFollowHeight = 2f;
         [SerializeField, Min(0f)] private float cameraLookAtHeight = 0.6f;
         [SerializeField, Min(0.1f)] private float cameraFollowSpeed = 12f;
+        [SerializeField, Min(0.01f)] private float cameraReturnDuration = 0.75f;
         [SerializeField, Range(-80f, 20f)] private float initialCameraPitch = -18f;
         [SerializeField, Range(-85f, 45f)] private float minCameraPitch = -65f;
         [SerializeField, Range(-45f, 85f)] private float maxCameraPitch = 25f;
@@ -117,7 +118,10 @@ namespace LittlePlanet.HybridTerraform
         private float _nextButtonStateUpdateTime;
         private float _nextCompletionHintUpdateTime;
         private bool _ownsCompletionHintArrow;
+        private Coroutine _cameraReturnRoutine;
+        private bool _isCameraReturning;
         public bool IsFlightModeActive => _state == SkillState.Flying || _state == SkillState.Approaching;
+        public bool IsCameraTransitionActive => _isCameraReturning || _state == SkillState.Approaching;
         public float FlightDuration => flightDuration;
         public float CooldownDuration => cooldownDuration;
         public int TerraformRadius => terraformRadius;
@@ -151,6 +155,7 @@ namespace LittlePlanet.HybridTerraform
             }
 
             UnbindButton();
+            StopCameraReturn();
             RestoreOrbitControls();
             SetCompletionHintVisible(false);
             UpdateIconState();
@@ -207,6 +212,7 @@ namespace LittlePlanet.HybridTerraform
             cameraFollowHeight = Mathf.Max(0f, cameraFollowHeight);
             cameraLookAtHeight = Mathf.Max(0f, cameraLookAtHeight);
             cameraFollowSpeed = Mathf.Max(0.1f, cameraFollowSpeed);
+            cameraReturnDuration = Mathf.Max(0.01f, cameraReturnDuration);
             if (maxCameraPitch < minCameraPitch)
             {
                 maxCameraPitch = minCameraPitch;
@@ -218,7 +224,7 @@ namespace LittlePlanet.HybridTerraform
 
         public void ActivateSkill()
         {
-            if (_state != SkillState.Ready)
+            if (_state != SkillState.Ready || _isCameraReturning)
             {
                 return;
             }
@@ -756,16 +762,77 @@ namespace LittlePlanet.HybridTerraform
 
             if (restoreCamera && controlledCamera != null)
             {
-                controlledCamera.transform.SetPositionAndRotation(_savedCameraPosition, _savedCameraRotation);
+                StartCameraReturn();
+            }
+            else
+            {
+                RestoreOrbitControls();
             }
 
             RestoreShipState();
-            RestoreOrbitControls();
             _approachTile = null;
             _flightEndTime = 0f;
             _cooldownEndTime = 0f;
             _state = SkillState.Ready;
             UpdateIconState();
+        }
+
+        private void StartCameraReturn()
+        {
+            if (controlledCamera == null)
+            {
+                RestoreOrbitControls();
+                return;
+            }
+
+            if (_cameraReturnRoutine != null)
+            {
+                StopCoroutine(_cameraReturnRoutine);
+            }
+
+            _cameraReturnRoutine = StartCoroutine(CameraReturnRoutine());
+        }
+
+        private void StopCameraReturn()
+        {
+            if (_cameraReturnRoutine != null)
+            {
+                StopCoroutine(_cameraReturnRoutine);
+                _cameraReturnRoutine = null;
+            }
+
+            _isCameraReturning = false;
+        }
+
+        private System.Collections.IEnumerator CameraReturnRoutine()
+        {
+            _isCameraReturning = true;
+            SetOrbitCameraEnabled(false);
+            SetOrbitZoomEnabled(false);
+
+            var startPosition = controlledCamera.transform.position;
+            var startRotation = controlledCamera.transform.rotation;
+            var duration = Mathf.Max(0.01f, cameraReturnDuration);
+            var elapsed = 0f;
+
+            while (elapsed < duration && controlledCamera != null)
+            {
+                elapsed += Time.deltaTime;
+                var t = Mathf.Clamp01(elapsed / duration);
+                var easedT = t * t * (3f - 2f * t);
+                controlledCamera.transform.position = Vector3.Lerp(startPosition, _savedCameraPosition, easedT);
+                controlledCamera.transform.rotation = Quaternion.Slerp(startRotation, _savedCameraRotation, easedT);
+                yield return null;
+            }
+
+            if (controlledCamera != null)
+            {
+                controlledCamera.transform.SetPositionAndRotation(_savedCameraPosition, _savedCameraRotation);
+            }
+
+            _isCameraReturning = false;
+            _cameraReturnRoutine = null;
+            RestoreOrbitControls();
         }
 
         private void LogSkill(string message)

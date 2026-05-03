@@ -13,9 +13,9 @@ MonoBehaviour:
   m_Name: Fly_radius
   m_EditorClassIdentifier: Assembly-CSharp::UpgradeDefinition
   upgradeName: "\u0420\u0430\u0434\u0438\u0443\u0441 \u043E\u0437\u0435\u043B\u0435\u043D\u0435\u043D\u0438\u044F"
-  baseCost: 100
-  costMultiplier: 1.25
+  baseCost: 180
+  costMultiplier: 1.55
   upgradeType: 1
-  maxLevel: 10
+  maxLevel: 5
   valuePerLevel: 1
   icon: {fileID: 21300000, guid: 7e1aa1030a0181e43b41baf54f15b077, type: 3}

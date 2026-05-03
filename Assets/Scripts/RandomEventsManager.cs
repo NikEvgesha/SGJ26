@@ -76,6 +76,7 @@ public sealed class RandomEventsManager : MonoBehaviour
     private Vector3 _eventCautionBaseScale = Vector3.one;
     private Tile _activeAreaCenter;
     private GameObject _activeVolcanoVisual;
+    private Coroutine _goToAreaRoutine;
 
     private void Awake()
     {
@@ -483,15 +484,32 @@ public sealed class RandomEventsManager : MonoBehaviour
 
     private void GoToArea()
     {
+        if (_goToAreaRoutine != null)
+        {
+            StopCoroutine(_goToAreaRoutine);
+        }
+
+        _goToAreaRoutine = StartCoroutine(GoToAreaRoutine());
+    }
+
+    private IEnumerator GoToAreaRoutine()
+    {
         if (_activeAreaCenter == null || planet == null)
         {
-            return;
+            yield break;
         }
 
         flySkill?.CancelSkillAndStartCooldown();
         buildPanel?.CancelBuildMode();
+
+        while (flySkill != null && flySkill.IsCameraTransitionActive)
+        {
+            yield return null;
+        }
+
         var safeDistance = Mathf.Max(focusCameraDistance, planet.Radius + focusSurfacePadding, planet.CurrentWaterRadius + focusSurfacePadding);
         cameraController?.FocusOnLocalDirection(_activeAreaCenter.Center, safeDistance, focusDurationSeconds);
+        _goToAreaRoutine = null;
     }
 
     private void ShowCaution(RandomEventDefinition eventDefinition)

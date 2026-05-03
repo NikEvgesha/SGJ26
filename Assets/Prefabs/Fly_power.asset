@@ -14,9 +14,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::UpgradeDefinition
   upgradeName: "\u0421\u0438\u043B\u0430 \u043E\u0437\u0435\u043B\u0435\u043D\u0435\u043D\u0438\u044F"
   description: 
-  baseCost: 100
-  costMultiplier: 1.1
+  baseCost: 120
+  costMultiplier: 1.35
   upgradeType: 0
-  maxLevel: 50
-  valuePerLevel: 0.5
+  maxLevel: 12
+  valuePerLevel: 0.15
   icon: {fileID: 21300000, guid: 5f0409c776aad7c49ac7c366be1adf31, type: 3}
