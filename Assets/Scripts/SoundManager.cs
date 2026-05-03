@@ -1,8 +1,10 @@
 using UnityEngine;
 using UnityEngine.UI;
 using LittlePlanet.HybridTerraform;
+using LittlePlanet.PlanetSystem;
 using LittlePlanet.RuntimeInput;
 using LittlePlanet.UI;
+using System.Collections;
 
 public class SoundManager : MonoBehaviour
 {
@@ -19,6 +21,7 @@ public class SoundManager : MonoBehaviour
 
     [Header("Flight")]
     [SerializeField] private PlanetFlyTerraformSkill flySkill;
+    [SerializeField] private Planet planet;
     [SerializeField, Min(0.05f)] private float flightStateCheckInterval = 0.1f;
 
     [Header("Volume")]
@@ -34,6 +37,13 @@ public class SoundManager : MonoBehaviour
     [SerializeField] private string musicSliderObjectName = "MusicSlider";
     [SerializeField] private string soundSliderObjectName = "SoundSlider";
 
+    [Header("Loading Screen")]
+    [SerializeField] private string loadingScreenObjectName = "LoadingScreen";
+    [SerializeField, Min(0f)] private float minimumLoadingScreenSeconds = 0.75f;
+    [SerializeField, Min(0.5f)] private float loadingScreenMaxWaitSeconds = 20f;
+    [SerializeField] private GameObject loadingScreenObject;
+    [SerializeField] private CanvasGroup loadingScreenCanvasGroup;
+
     private bool _isShipNoiseActive;
     private float _nextFlightStateCheckTime;
     private bool _isSettingsOpen;
@@ -46,6 +56,9 @@ public class SoundManager : MonoBehaviour
     private Slider _musicSlider;
     private Slider _soundSlider;
     private SettingsPanel _settingsPanelController;
+    private bool _isStartupReady;
+
+    public bool IsStartupReady => _isStartupReady;
 
     private void Awake()
     {
@@ -56,6 +69,8 @@ public class SoundManager : MonoBehaviour
 
         ResolveUiReferences();
         CacheSettingsState();
+        ResolveLoadingScreenReferences();
+        ShowLoadingScreen();
     }
 
     private void OnEnable()
@@ -70,11 +85,15 @@ public class SoundManager : MonoBehaviour
         UnbindUi();
     }
 
-    private void Start()
+    private IEnumerator Start()
     {
+        _isStartupReady = false;
         CloseSettingsPanel();
+        yield return RunStartupLoading();
         PlayMusic();
         UpdateShipNoiseState(force: true);
+        _isStartupReady = true;
+        HideLoadingScreen();
     }
 
     private void Update()
@@ -134,6 +153,11 @@ public class SoundManager : MonoBehaviour
         if (flySkill == null)
         {
             flySkill = FindFirstObjectByType<PlanetFlyTerraformSkill>(FindObjectsInactive.Include);
+        }
+
+        if (planet == null)
+        {
+            planet = FindFirstObjectByType<Planet>(FindObjectsInactive.Include);
         }
 
         musicSource = EnsureSource(musicSource, sourceIndex: 0, createMissingSources);
@@ -274,6 +298,113 @@ public class SoundManager : MonoBehaviour
             {
                 _settingsCanvasGroup = _settingsPanelObject.AddComponent<CanvasGroup>();
             }
+        }
+    }
+
+    private void ResolveLoadingScreenReferences()
+    {
+        if (loadingScreenObject == null && !string.IsNullOrWhiteSpace(loadingScreenObjectName))
+        {
+            loadingScreenObject = GameObject.Find(loadingScreenObjectName);
+        }
+
+        if (loadingScreenObject != null && loadingScreenCanvasGroup == null)
+        {
+            loadingScreenCanvasGroup = loadingScreenObject.GetComponent<CanvasGroup>();
+        }
+    }
+
+    private void ShowLoadingScreen()
+    {
+        ResolveLoadingScreenReferences();
+        if (loadingScreenObject == null)
+        {
+            return;
+        }
+
+        if (!loadingScreenObject.activeSelf)
+        {
+            loadingScreenObject.SetActive(true);
+        }
+
+        if (loadingScreenCanvasGroup != null)
+        {
+            loadingScreenCanvasGroup.alpha = 1f;
+            loadingScreenCanvasGroup.interactable = true;
+            loadingScreenCanvasGroup.blocksRaycasts = true;
+        }
+    }
+
+    private void HideLoadingScreen()
+    {
+        ResolveLoadingScreenReferences();
+        if (loadingScreenObject == null)
+        {
+            return;
+        }
+
+        if (loadingScreenCanvasGroup != null)
+        {
+            loadingScreenCanvasGroup.alpha = 0f;
+            loadingScreenCanvasGroup.interactable = false;
+            loadingScreenCanvasGroup.blocksRaycasts = false;
+        }
+
+        loadingScreenObject.SetActive(false);
+    }
+
+    private IEnumerator RunStartupLoading()
+    {
+        ShowLoadingScreen();
+        ResolveReferences(createMissingSources: true);
+
+        var startupStartTime = Time.unscaledTime;
+        var deadline = startupStartTime + Mathf.Max(0.5f, loadingScreenMaxWaitSeconds);
+
+        yield return null;
+
+        while (!IsPlanetReady() && Time.unscaledTime < deadline)
+        {
+            yield return null;
+        }
+
+        yield return EnsureMusicPrepared(deadline);
+
+        var elapsed = Time.unscaledTime - startupStartTime;
+        var remaining = Mathf.Max(0f, minimumLoadingScreenSeconds - elapsed);
+        if (remaining > 0f)
+        {
+            yield return new WaitForSecondsRealtime(remaining);
+        }
+    }
+
+    private bool IsPlanetReady()
+    {
+        if (planet == null)
+        {
+            planet = FindFirstObjectByType<Planet>(FindObjectsInactive.Include);
+        }
+
+        if (planet == null)
+        {
+            return true;
+        }
+
+        var tiles = planet.Tiles;
+        return tiles != null && tiles.Count > 0;
+    }
+
+    private IEnumerator EnsureMusicPrepared(float deadline)
+    {
+        if (musicClip == null)
+        {
+            yield break;
+        }
+
+        PrepareClip(musicClip);
+        while (musicClip.loadState == AudioDataLoadState.Loading && Time.unscaledTime < deadline)
+        {
+            yield return null;
         }
     }
 

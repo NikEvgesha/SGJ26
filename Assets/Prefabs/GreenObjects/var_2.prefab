@@ -10,7 +10,11 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 3433957878666572455, guid: eaea2781de9d0a848962bc429bed89f6, type: 3}
       propertyPath: m_Name
-      value: GreenObj
+      value: var_2
+      objectReference: {fileID: 0}
+    - target: {fileID: 5104377612068655994, guid: eaea2781de9d0a848962bc429bed89f6, type: 3}
+      propertyPath: m_Name
+      value: stage_1
       objectReference: {fileID: 0}
     - target: {fileID: 6271606133806992406, guid: eaea2781de9d0a848962bc429bed89f6, type: 3}
       propertyPath: m_LocalPosition.x
@@ -52,8 +56,21 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 9148790954933981293, guid: eaea2781de9d0a848962bc429bed89f6, type: 3}
+      propertyPath: stageActivationPercents.Array.size
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 9148790954933981293, guid: eaea2781de9d0a848962bc429bed89f6, type: 3}
+      propertyPath: 'stageActivationPercents.Array.data[0]'
+      value: 40
+      objectReference: {fileID: 0}
+    - target: {fileID: 9148790954933981293, guid: eaea2781de9d0a848962bc429bed89f6, type: 3}
+      propertyPath: 'stageActivationPercents.Array.data[1]'
+      value: 80
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
-    m_RemovedGameObjects: []
+    m_RemovedGameObjects:
+    - {fileID: 6353017492884996453, guid: eaea2781de9d0a848962bc429bed89f6, type: 3}
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: eaea2781de9d0a848962bc429bed89f6, type: 3}
