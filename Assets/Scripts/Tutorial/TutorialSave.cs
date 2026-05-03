@@ -24,11 +24,4 @@ public static class TutorialSave
     {
         PlayerPrefs.SetInt(CompletedKey, 1);
     }
-
-    public static void Clear()
-    {
-        PlayerPrefs.DeleteKey(StepKey);
-        PlayerPrefs.DeleteKey(CompletedKey);
-        PlayerPrefs.Save();
-    }
 }

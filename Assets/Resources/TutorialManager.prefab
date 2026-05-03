@@ -50,7 +50,6 @@ MonoBehaviour:
   objectivePanelPrefab: {fileID: 100003, guid: 6b4bd1282e7f46a590d60df377e3d7ee, type: 3}
   arrowSprite: {fileID: 21300000, guid: 94be1a6a704fc27458a45378dafba3a2, type: 3}
   objectivePanelResourcePath: TutorialObjectivePanel
-  resetSaveFromInspector: 0
   starterScienceTarget: 10
   postUpgradeScienceTarget: 100
   tutorialStartTemperature: 50

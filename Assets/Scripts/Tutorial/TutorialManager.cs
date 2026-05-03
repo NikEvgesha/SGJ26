@@ -31,9 +31,6 @@ public sealed class TutorialManager : MonoBehaviour
     [SerializeField] private Sprite arrowSprite;
     [SerializeField] private string objectivePanelResourcePath = "TutorialObjectivePanel";
 
-    [Header("Debug")]
-    [SerializeField] private bool resetSaveFromInspector;
-
     [Header("Targets")]
     [SerializeField, Min(0)] private int starterScienceTarget = 10;
     [SerializeField, Min(0)] private int postUpgradeScienceTarget = 100;
@@ -188,24 +185,6 @@ public sealed class TutorialManager : MonoBehaviour
         RefreshStepArrows();
         UpdateArrowPositions();
         EvaluateStepCompletion();
-    }
-
-    private void OnValidate()
-    {
-        if (!resetSaveFromInspector)
-        {
-            return;
-        }
-
-        resetSaveFromInspector = false;
-        ResetTutorialSave();
-    }
-
-    [ContextMenu("Reset Tutorial Save")]
-    private void ResetTutorialSave()
-    {
-        TutorialSave.Clear();
-        Debug.Log("[TutorialManager] Tutorial save reset.", this);
     }
 
     private void SubscribeEvents()
