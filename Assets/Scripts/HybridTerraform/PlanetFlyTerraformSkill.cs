@@ -1,6 +1,7 @@
 using LittlePlanet.PlanetSystem;
 using LittlePlanet.RuntimeInput;
 using LittlePlanet.UI;
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 #if ENABLE_INPUT_SYSTEM
@@ -120,6 +121,7 @@ namespace LittlePlanet.HybridTerraform
         private bool _ownsCompletionHintArrow;
         private Coroutine _cameraReturnRoutine;
         private bool _isCameraReturning;
+        private bool _tutorialHotkeyAllowed = true;
         public bool IsFlightModeActive => _state == SkillState.Flying || _state == SkillState.Approaching;
         public bool IsCameraTransitionActive => _isCameraReturning || _state == SkillState.Approaching;
         public float FlightDuration => flightDuration;
@@ -127,6 +129,9 @@ namespace LittlePlanet.HybridTerraform
         public int TerraformRadius => terraformRadius;
         public float TerraformPowerPerSecond => terraformPowerPerSecond;
         public float CurrencyPerCompletedTile => currencyPerCompletedTile;
+        public event Action SkillActivated;
+        public event Action FlightStarted;
+        public event Action FlightEnded;
 
         private void Awake()
         {
@@ -238,6 +243,7 @@ namespace LittlePlanet.HybridTerraform
             }
 
             BeginApproachToTile(tile);
+            SkillActivated?.Invoke();
         }
 
         public void ToggleSkill()
@@ -312,6 +318,11 @@ namespace LittlePlanet.HybridTerraform
             }
 
             CancelSkill();
+        }
+
+        public void SetTutorialHotkeyAllowed(bool isAllowed)
+        {
+            _tutorialHotkeyAllowed = isAllowed;
         }
 
         private void HandlePlanetTileClicked(Tile tile)
@@ -394,6 +405,7 @@ namespace LittlePlanet.HybridTerraform
             _cooldownEndTime = 0f;
             _state = SkillState.Flying;
             LogSkill("Flying started.");
+            FlightStarted?.Invoke();
         }
 
         private void UpdateFlight()
@@ -775,6 +787,7 @@ namespace LittlePlanet.HybridTerraform
             _cooldownEndTime = 0f;
             _state = SkillState.Ready;
             UpdateIconState();
+            FlightEnded?.Invoke();
         }
 
         private void StartCameraReturn()
@@ -1044,7 +1057,7 @@ namespace LittlePlanet.HybridTerraform
 
         private void HandleHotkey()
         {
-            if (!enableHotkey || !InputCompat.WasKeyPressedThisFrame(activationHotkey))
+            if (!enableHotkey || !_tutorialHotkeyAllowed || !InputCompat.WasKeyPressedThisFrame(activationHotkey))
             {
                 return;
             }

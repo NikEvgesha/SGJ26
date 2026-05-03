@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using LittlePlanet.UI;
 using LittlePlanet.PlanetSystem;
@@ -33,6 +34,8 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
     [SerializeField, Min(0.05f)] private float waterDestroyCheckInterval = 0.25f;
 
     [Header("Hotkeys")]
+    [SerializeField] private bool enableOpenHotkey = true;
+    [SerializeField] private KeyCode openHotkey = KeyCode.B;
     [SerializeField] private bool enableNumberHotkeys = true;
     [SerializeField] private bool openPanelOnNumberHotkey = true;
 
@@ -52,8 +55,13 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
     private bool _planetGenerationBound;
     private int _lastSlotClickFrame = -1;
     private float _nextWaterDestroyCheckTime;
+    private int _tutorialAllowedBuildingIndex = -1;
+    private int _tutorialAllowedNumberHotkey = -1;
 
     public bool IsWindowOpen => _isOpen;
+    public event Action<bool> WindowStateChanged;
+    public event Action<Building, int> BuildingSelected;
+    public event Action<Building, Tile> BuildingPlaced;
 
     private sealed class PlacedBuildingEntry
     {
@@ -91,6 +99,7 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
 
     private void Update()
     {
+        HandleOpenHotkey();
         HandleNumberHotkeys();
         CheckPlacedBuildingsWaterContact();
 
@@ -127,6 +136,12 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
             return;
         }
 
+        var slotIndex = _slots.IndexOf(slot);
+        if (_tutorialAllowedBuildingIndex >= 0 && slotIndex != _tutorialAllowedBuildingIndex)
+        {
+            return;
+        }
+
         _selectedSlot = slot;
         _selectedBuilding = slot.Building;
         _lastSlotClickFrame = Time.frameCount;
@@ -139,6 +154,8 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
         {
             planet.ClickTintEnabled = false;
         }
+
+        BuildingSelected?.Invoke(_selectedBuilding, slotIndex);
     }
 
     public bool SelectBuildingByIndex(int index)
@@ -150,6 +167,70 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
 
         SelectBuilding(_slots[index]);
         return true;
+    }
+
+    public void SetHotkeysEnabled(bool openHotkeyEnabled, bool numberHotkeysEnabled)
+    {
+        enableOpenHotkey = openHotkeyEnabled;
+        enableNumberHotkeys = numberHotkeysEnabled;
+    }
+
+    public void SetTutorialAllowedBuildingIndex(int allowedIndex)
+    {
+        _tutorialAllowedBuildingIndex = allowedIndex;
+        RefreshTutorialSlotVisibility();
+    }
+
+    public void SetTutorialAllowedNumberHotkey(int allowedNumber)
+    {
+        _tutorialAllowedNumberHotkey = allowedNumber;
+    }
+
+    public void ClearTutorialRestrictions()
+    {
+        _tutorialAllowedBuildingIndex = -1;
+        _tutorialAllowedNumberHotkey = -1;
+        RefreshTutorialSlotVisibility();
+    }
+
+    public RectTransform GetSlotRect(int index)
+    {
+        if (index < 0 || index >= _slots.Count || _slots[index] == null)
+        {
+            return null;
+        }
+
+        return _slots[index].transform as RectTransform;
+    }
+
+    public Tile FindNearestBuildableTileToCamera()
+    {
+        if (planet == null || interactionCamera == null || _selectedBuilding == null)
+        {
+            return null;
+        }
+
+        var cameraPosition = interactionCamera.transform.position;
+        Tile bestTile = null;
+        var bestDistance = float.MaxValue;
+        var tiles = planet.Tiles;
+        for (var i = 0; i < tiles.Count; i++)
+        {
+            var tile = tiles[i];
+            if (!CanBuildOnTile(tile))
+            {
+                continue;
+            }
+
+            var distance = (planet.GetTileWorldSurfaceCenter(tile) - cameraPosition).sqrMagnitude;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestTile = tile;
+            }
+        }
+
+        return bestTile;
     }
 
     public void ShowTooltip(BuildingUISlot slot)
@@ -177,6 +258,7 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
         canvasGroup.alpha = isOpen ? 1f : 0f;
         canvasGroup.interactable = isOpen;
         canvasGroup.blocksRaycasts = isOpen;
+        WindowStateChanged?.Invoke(isOpen);
 
         if (!isOpen)
         {
@@ -207,6 +289,16 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
         }
     }
 
+    private void HandleOpenHotkey()
+    {
+        if (!enableOpenHotkey || !InputCompat.WasKeyPressedThisFrame(openHotkey))
+        {
+            return;
+        }
+
+        Toggle();
+    }
+
     private void HandleNumberHotkeys()
     {
         if (!enableNumberHotkeys)
@@ -219,6 +311,11 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
             if (!InputCompat.WasNumberKeyPressedThisFrame(number))
             {
                 continue;
+            }
+
+            if (_tutorialAllowedNumberHotkey > 0 && number != _tutorialAllowedNumberHotkey)
+            {
+                return;
             }
 
             if (!_isOpen)
@@ -268,6 +365,19 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
             var slot = Instantiate(slotPrefab, slotsRoot);
             slot.Initialize(this, building);
             _slots.Add(slot);
+        }
+
+        RefreshTutorialSlotVisibility();
+    }
+
+    private void RefreshTutorialSlotVisibility()
+    {
+        for (var i = 0; i < _slots.Count; i++)
+        {
+            if (_slots[i] != null)
+            {
+                _slots[i].gameObject.SetActive(_tutorialAllowedBuildingIndex < 0 || i == _tutorialAllowedBuildingIndex);
+            }
         }
     }
 
@@ -331,6 +441,7 @@ public class BuildPanel : MonoBehaviour, IManagedWindow
         });
         _occupiedTileIndices.Add(tile.Index);
         buildingEffectsController?.RegisterEffects(_selectedBuilding.Effects);
+        BuildingPlaced?.Invoke(_selectedBuilding, tile);
     }
 
     private void PositionBuilding(Transform target, Tile tile)
